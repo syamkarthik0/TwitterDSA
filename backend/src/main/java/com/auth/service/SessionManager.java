@@ -1,28 +1,23 @@
 package com.auth.service;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
-@Service
+@Component
 public class SessionManager {
-    private final Map<String, String> sessions = new HashMap<>();
+    private final Map<String, String> userSessions = new HashMap<>();
 
     public void createSession(String username, String token) {
-        sessions.put(username, token);
-    }
-
-    public Optional<String> getSession(String username) {
-        return Optional.ofNullable(sessions.get(username));
+        userSessions.put(username, token);
     }
 
     public void invalidateSession(String username) {
-        sessions.remove(username);
+        userSessions.remove(username);
     }
 
     public boolean isSessionValid(String username, String token) {
-        String storedToken = sessions.get(username);
+        String storedToken = userSessions.get(username);
         return storedToken != null && storedToken.equals(token);
     }
 }

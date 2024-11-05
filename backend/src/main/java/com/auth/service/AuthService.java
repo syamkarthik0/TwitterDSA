@@ -1,17 +1,16 @@
 package com.auth.service;
 
 import com.auth.model.User;
+import com.auth.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
 public class AuthService {
-    private final Map<String, User> users = new HashMap<>();
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -19,21 +18,28 @@ public class AuthService {
     @Autowired
     private SessionManager sessionManager;
 
-    public void register(User user) {
-        if (users.containsKey(user.getUsername())) {
+    public User register(User user) {
+        if (userRepository.existsByUsername(user.getUsername())) {
             throw new RuntimeException("Username already exists");
+        }
+        
+        // Set default role if not specified
+        if (user.getRole() == null || user.getRole().isEmpty()) {
+            user.setRole("USER");
         }
         
         // Encrypt password before storing
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        users.put(user.getUsername(), user);
+        return userRepository.save(user);
     }
 
     public Optional<User> authenticate(String username, String password) {
-        User user = users.get(username);
-        if (user != null && passwordEncoder.matches(password, user.getPassword())) {
-            return Optional.of(user);
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        
+        if (userOpt.isPresent() && passwordEncoder.matches(password, userOpt.get().getPassword())) {
+            return userOpt;
         }
+        
         return Optional.empty();
     }
 

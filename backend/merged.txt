@@ -23,13 +23,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = "*", maxAge = 3600)
 public class AuthController {
 
     @Autowired
@@ -44,8 +44,23 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody User user) {
         try {
-            authService.register(user);
-            return ResponseEntity.ok().body(Map.of("message", "User registered successfully"));
+            User registeredUser = authService.register(user);
+            UserDetails userDetails = org.springframework.security.core.userdetails.User
+                .withUsername(registeredUser.getUsername())
+                .password("")
+                .authorities(registeredUser.getRole())
+                .build();
+
+            String token = jwtUtil.generateToken(userDetails);
+            sessionManager.createSession(registeredUser.getUsername(), token);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "User registered successfully");
+            response.put("token", token);
+            response.put("username", registeredUser.getUsername());
+            response.put("role", registeredUser.getRole());
+            
+            return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -53,39 +68,65 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
+        if (!credentials.containsKey("username") || !credentials.containsKey("password")) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Username and password are required"));
+        }
+
         String username = credentials.get("username");
         String password = credentials.get("password");
 
-        Optional<User> userOpt = authService.authenticate(username, password);
-        
-        if (userOpt.isPresent()) {
+        try {
+            Optional<User> userOpt = authService.authenticate(username, password);
+            
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                UserDetails userDetails = org.springframework.security.core.userdetails.User
+                    .withUsername(username)
+                    .password("")
+                    .authorities(user.getRole())
+                    .build();
+
+                String token = jwtUtil.generateToken(userDetails);
+                sessionManager.createSession(username, token);
+
+                Map<String, Object> response = new HashMap<>();
+                response.put("token", token);
+                response.put("username", username);
+                response.put("role", user.getRole());
+                return ResponseEntity.ok(response);
+            }
+
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid credentials"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Authentication failed: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestHeader(value = "Authorization", required = false) String token) {
+        if (token == null || !token.startsWith("Bearer ")) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid or missing token"));
+        }
+
+        try {
+            String jwt = token.substring(7);
+            String username = jwtUtil.extractUsername(jwt);
+            
             UserDetails userDetails = org.springframework.security.core.userdetails.User
                 .withUsername(username)
                 .password("")
                 .authorities("USER")
                 .build();
 
-            String token = jwtUtil.generateToken(userDetails);
-            sessionManager.createSession(username, token);
+            if (!jwtUtil.validateToken(jwt, userDetails)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid or expired token"));
+            }
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("token", token);
-            response.put("username", username);
-            return ResponseEntity.ok(response);
-        }
-
-        return ResponseEntity.badRequest().body(Map.of("error", "Invalid credentials"));
-    }
-
-    @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestHeader("Authorization") String token) {
-        if (token != null && token.startsWith("Bearer ")) {
-            String jwt = token.substring(7);
-            String username = jwtUtil.extractUsername(jwt);
             authService.logout(username);
             return ResponseEntity.ok().body(Map.of("message", "Logged out successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Logout failed: " + e.getMessage()));
         }
-        return ResponseEntity.badRequest().body(Map.of("error", "Invalid token"));
     }
 }
 
@@ -96,14 +137,41 @@ package com.auth.model;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import javax.persistence.*;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "users")
 public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(unique = true, nullable = false)
     private String username;
+
+    @Column(nullable = false)
     private String password;
-    private String role;
+
+    @Column(nullable = false)
+    private String role = "USER";
+}
+
+
+// Content from src\main\java\com\auth\repository\UserRepository.java
+package com.auth.repository;
+
+import com.auth.model.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import java.util.Optional;
+
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    Optional<User> findByUsername(String username);
+    boolean existsByUsername(String username);
 }
 
 
@@ -297,17 +365,16 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 package com.auth.service;
 
 import com.auth.model.User;
+import com.auth.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
 public class AuthService {
-    private final Map<String, User> users = new HashMap<>();
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -315,21 +382,28 @@ public class AuthService {
     @Autowired
     private SessionManager sessionManager;
 
-    public void register(User user) {
-        if (users.containsKey(user.getUsername())) {
+    public User register(User user) {
+        if (userRepository.existsByUsername(user.getUsername())) {
             throw new RuntimeException("Username already exists");
+        }
+        
+        // Set default role if not specified
+        if (user.getRole() == null || user.getRole().isEmpty()) {
+            user.setRole("USER");
         }
         
         // Encrypt password before storing
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        users.put(user.getUsername(), user);
+        return userRepository.save(user);
     }
 
     public Optional<User> authenticate(String username, String password) {
-        User user = users.get(username);
-        if (user != null && passwordEncoder.matches(password, user.getPassword())) {
-            return Optional.of(user);
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        
+        if (userOpt.isPresent() && passwordEncoder.matches(password, userOpt.get().getPassword())) {
+            return userOpt;
         }
+        
         return Optional.empty();
     }
 
@@ -342,29 +416,24 @@ public class AuthService {
 // Content from src\main\java\com\auth\service\SessionManager.java
 package com.auth.service;
 
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
-@Service
+@Component
 public class SessionManager {
-    private final Map<String, String> sessions = new HashMap<>();
+    private final Map<String, String> userSessions = new HashMap<>();
 
     public void createSession(String username, String token) {
-        sessions.put(username, token);
-    }
-
-    public Optional<String> getSession(String username) {
-        return Optional.ofNullable(sessions.get(username));
+        userSessions.put(username, token);
     }
 
     public void invalidateSession(String username) {
-        sessions.remove(username);
+        userSessions.remove(username);
     }
 
     public boolean isSessionValid(String username, String token) {
-        String storedToken = sessions.get(username);
+        String storedToken = userSessions.get(username);
         return storedToken != null && storedToken.equals(token);
     }
 }
