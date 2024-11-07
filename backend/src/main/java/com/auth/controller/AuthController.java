@@ -30,20 +30,23 @@ public class AuthController {
     public ResponseEntity<?> register(@RequestBody User user) {
         try {
             User registeredUser = authService.register(user);
+            
+            // Create UserDetails for JWT generation
             UserDetails userDetails = org.springframework.security.core.userdetails.User
                 .withUsername(registeredUser.getUsername())
                 .password("")
                 .authorities(registeredUser.getRole())
                 .build();
 
+            // Generate JWT token
             String token = jwtUtil.generateToken(userDetails);
             sessionManager.createSession(registeredUser.getUsername(), token);
 
+            // Return response with token
             Map<String, Object> response = new HashMap<>();
-            response.put("message", "User registered successfully");
             response.put("token", token);
             response.put("username", registeredUser.getUsername());
-            response.put("role", registeredUser.getRole());
+            response.put("message", "User registered successfully");
             
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
@@ -77,7 +80,6 @@ public class AuthController {
                 Map<String, Object> response = new HashMap<>();
                 response.put("token", token);
                 response.put("username", username);
-                response.put("role", user.getRole());
                 return ResponseEntity.ok(response);
             }
 

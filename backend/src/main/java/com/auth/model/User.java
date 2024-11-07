@@ -1,5 +1,6 @@
 package com.auth.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -10,6 +11,7 @@ import javax.persistence.*;
 @AllArgsConstructor
 @Entity
 @Table(name = "users")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

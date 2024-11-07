@@ -45,20 +45,23 @@ public class AuthController {
     public ResponseEntity<?> register(@RequestBody User user) {
         try {
             User registeredUser = authService.register(user);
+            
+            // Create UserDetails for JWT generation
             UserDetails userDetails = org.springframework.security.core.userdetails.User
                 .withUsername(registeredUser.getUsername())
                 .password("")
                 .authorities(registeredUser.getRole())
                 .build();
 
+            // Generate JWT token
             String token = jwtUtil.generateToken(userDetails);
             sessionManager.createSession(registeredUser.getUsername(), token);
 
+            // Return response with token
             Map<String, Object> response = new HashMap<>();
-            response.put("message", "User registered successfully");
             response.put("token", token);
             response.put("username", registeredUser.getUsername());
-            response.put("role", registeredUser.getRole());
+            response.put("message", "User registered successfully");
             
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
@@ -92,7 +95,6 @@ public class AuthController {
                 Map<String, Object> response = new HashMap<>();
                 response.put("token", token);
                 response.put("username", username);
-                response.put("role", user.getRole());
                 return ResponseEntity.ok(response);
             }
 
@@ -131,6 +133,110 @@ public class AuthController {
 }
 
 
+// Content from src\main\java\com\auth\controller\TweetController.java
+package com.auth.controller;
+
+import com.auth.model.Tweet;
+import com.auth.service.TweetService;
+import lombok.Data;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/tweets")
+@CrossOrigin(origins = "*", maxAge = 3600)
+public class TweetController {
+    
+    @Autowired
+    private TweetService tweetService;
+
+    @Data
+    public static class TweetRequest {
+        private String content;
+    }
+
+    @PostMapping
+    public ResponseEntity<?> createTweet(
+        @RequestBody TweetRequest request,
+        @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        try {
+            Tweet tweet = tweetService.createTweet(
+                request.getContent(),
+                userDetails.getUsername()
+            );
+            return ResponseEntity.ok(tweet);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", "Failed to create tweet"));
+        }
+    }
+
+    @GetMapping
+    public ResponseEntity<Page<Tweet>> getTweets(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(tweetService.getTweets(page, size));
+    }
+
+    @GetMapping("/user/{username}")
+    public ResponseEntity<?> getUserTweets(
+        @PathVariable String username,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
+    ) {
+        try {
+            Page<Tweet> tweets = tweetService.getUserTweets(username, page, size);
+            return ResponseEntity.ok(tweets);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", e.getMessage()));
+        }
+    }
+}
+
+
+// Content from src\main\java\com\auth\model\Tweet.java
+package com.auth.model;
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import javax.persistence.*;
+import java.time.LocalDateTime;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "tweets")
+public class Tweet {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = 280)
+    private String content;
+
+    @Column(nullable = false)
+    private LocalDateTime timestamp;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+}
+
+
 // Content from src\main\java\com\auth\model\User.java
 package com.auth.model;
 
@@ -157,6 +263,23 @@ public class User {
 
     @Column(nullable = false)
     private String role = "USER";
+}
+
+
+// Content from src\main\java\com\auth\repository\TweetRepository.java
+package com.auth.repository;
+
+import com.auth.model.Tweet;
+import com.auth.model.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface TweetRepository extends JpaRepository<Tweet, Long> {
+    Page<Tweet> findAllByOrderByTimestampDesc(Pageable pageable);
+    Page<Tweet> findByUserOrderByTimestampDesc(User user, Pageable pageable);
 }
 
 
@@ -332,16 +455,13 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
     protected void configure(HttpSecurity http) throws Exception {
         http.cors().and().csrf().disable()
             .authorizeRequests()
-            .antMatchers("/api/auth/**").permitAll() // Allow public access to authentication endpoints
-            .antMatchers("/h2-console/**").permitAll() // Allow access to H2 console
+            .antMatchers("/api/auth/**").permitAll()
+            .antMatchers("/api/tweets/**").authenticated()
             .anyRequest().authenticated()
-            .and()
-            .headers().frameOptions().disable() // Enable H2 console in a frame
             .and()
             .sessionManagement()
             .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
 
-        // Add JWT filter before UsernamePasswordAuthenticationFilter
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
     }
 
@@ -353,9 +473,10 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000")); // React frontend
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With"));
+        configuration.setExposedHeaders(Arrays.asList("Authorization"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -439,6 +560,70 @@ public class SessionManager {
     public boolean isSessionValid(String username, String token) {
         String storedToken = userSessions.get(username);
         return storedToken != null && storedToken.equals(token);
+    }
+}
+
+
+// Content from src\main\java\com\auth\service\TweetService.java
+package com.auth.service;
+
+import com.auth.model.Tweet;
+import com.auth.model.User;
+import com.auth.repository.TweetRepository;
+import com.auth.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
+
+@Service
+public class TweetService {
+    @Autowired
+    private TweetRepository tweetRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    public Tweet createTweet(String content, String username) {
+        if (content == null || content.trim().isEmpty()) {
+            throw new IllegalArgumentException("Tweet content cannot be empty");
+        }
+        if (content.length() > 280) {
+            throw new IllegalArgumentException("Tweet content cannot exceed 280 characters");
+        }
+
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Tweet tweet = new Tweet();
+        tweet.setContent(content.trim());
+        tweet.setTimestamp(LocalDateTime.now());
+        tweet.setUser(user);
+
+        return tweetRepository.save(tweet);
+    }
+
+    public Page<Tweet> getTweets(int page, int size) {
+        if (size > 50) {
+            size = 50; // Limit maximum page size
+        }
+        return tweetRepository.findAllByOrderByTimestampDesc(
+            PageRequest.of(page, size)
+        );
+    }
+
+    public Page<Tweet> getUserTweets(String username, int page, int size) {
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+            
+        if (size > 50) {
+            size = 50; // Limit maximum page size
+        }
+        return tweetRepository.findByUserOrderByTimestampDesc(
+            user,
+            PageRequest.of(page, size)
+        );
     }
 }
 

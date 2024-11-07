@@ -1,129 +1,196 @@
-## Files, Pseudocode, Architecture and Flow Diagrams for Authentication System
+# Week 2: Tweet Microservice Architecture
 
-Based on the provided code, here's a breakdown of the filenames, pseudocode for key operations, a potential architecture diagram, and a flow diagram for user authentication.
+## System Overview
 
-### Filenames
+The Tweet microservice extends the Week 1 authentication system by adding tweet posting and retrieval capabilities. The system maintains a clean separation of concerns between frontend and backend components while ensuring secure communication through JWT authentication.
 
-- `AuthApplication.java`
-- `AuthController.java`
-- `User.java`
-- `UserRepository.java`
-- `JwtRequestFilter.java`
-- `JwtUtil.java`
-- `SecurityConfig.java`
-- `AuthService.java`
-- `SessionManager.java`
+## Architecture Components
 
-### Pseudocode
+### Frontend Architecture
 
-**User Registration**
-
-1.  Check if username already exists. If it does, throw an error.
-2.  If no role is specified, set the user's role to "USER".
-3.  Encrypt the user's password using `passwordEncoder`.
-4.  Save the user to the database using `userRepository`.
-5.  Generate a JWT (JSON Web Token) for the user using `jwtUtil`.
-6.  Create a session for the user in `sessionManager`, associating the username with the generated token.
-7.  Return a success response with the token, username, and role.
-
-**User Login**
-
-1.  Check if the request contains both username and password. If not, return an error.
-2.  Try to authenticate the user using `authService`.
-    - Retrieve the user from the database using `userRepository`.
-    - Compare the provided password with the stored, encrypted password using `passwordEncoder`.
-    - If authentication is successful, return the user details; otherwise, return an empty Optional.
-3.  If authentication is successful:
-    - Generate a JWT for the user.
-    - Create a session in `sessionManager`.
-    - Return a success response with the token, username, and role.
-4.  If authentication fails, return an error message.
-
-**User Logout**
-
-1.  Check if the request contains a valid authorization header with a Bearer token. If not, return an error.
-2.  Extract the JWT from the authorization header.
-3.  Extract the username from the JWT using `jwtUtil`.
-4.  Validate the JWT using `jwtUtil`.
-    - Check if the token has expired.
-    - Check if the username in the token matches the extracted username.
-5.  If the token is valid:
-    - Invalidate the user's session in `sessionManager`.
-    - Return a success message.
-6.  If the token is invalid, return an error message.
-
-### Architecture Diagram
+#### Components Hierarchy
 
 ```
-                                                     +----------------+
-                                                     |                |
-                                                     |  React Frontend |
-                                                     |                |
-                                                     +--------+--------+
-                                                              |
-                                                              | HTTP Requests
-                                                              |
-                                                     +--------v--------+
-                                                     |                |
-                                                     |  AuthController  |
-                                                     |                |
-                                                     +--------+--------+
-                                                              |
-                                                              | Calls
-                                                              |
-                                           +-----------------+-----------------+
-                                           |                 |                 |
-                                           |   AuthService     |  SessionManager  |
-                                           |                 |                 |
-                                           +--------+--------+--------+--------+
-                                                    |                 |
-                                                    | Uses            | Uses
-                                                    v                 v
-                                           +--------+--------+--------+--------+
-                                           |                |                |
-                                           |   JwtUtil       | UserRepository |
-                                           |                |                |
-                                           +-----------------+-----------------+
-                                                    |
-                                                    | Connects to
-                                                    v
-                                           +-----------------+
-                                           |                |
-                                           |    Database     |
-                                           |                |
-                                           +-----------------+
-
+App
+├── Login
+├── Register
+└── Dashboard
+    ├── TweetForm
+    └── TweetList
+        └── Tweet
 ```
 
-This diagram illustrates a simplified architecture where:
+#### State Management
 
-- The React Frontend interacts with the backend through HTTP requests.
-- The `AuthController` handles authentication-related endpoints.
-- `AuthService` manages user registration, login, and logout logic.
-- `SessionManager` handles user sessions and token validation.
-- `JwtUtil` is responsible for JWT generation and validation.
-- `UserRepository` interacts with the database to manage user data.
+- Uses React's useState for local component state
+- JWT token stored in localStorage for authentication
+- Tweet data managed at Dashboard level and passed down to child components
 
-### Flow Diagram for User Authentication
+#### Data Flow
 
-```mermaid
-graph LR
-A[User Login Request] --> B{AuthController}
-B --> C[AuthService.authenticate()]
-C --> D{UserRepository.findByUsername()}
-D --> E{PasswordEncoder.matches()}
-E -- Success --> F{JwtUtil.generateToken()}
-F --> G{SessionManager.createSession()}
-G --> H[Return Token]
-E -- Failure --> I[Return Error]
+1. User composes tweet in TweetForm
+2. Form submission triggers API call through tweetService
+3. On successful post, Dashboard refreshes tweet list
+4. Pagination controls trigger new data fetches
+5. Tweet components receive data as props and render
+
+### Backend Architecture
+
+#### Component Layers
+
+1. **Controller Layer** (REST API endpoints)
+
+   - TweetController: Handles HTTP requests
+   - Input validation
+   - Authentication verification
+   - Response formatting
+
+2. **Service Layer** (Business Logic)
+
+   - TweetService: Core business logic
+   - User association
+   - Data validation
+   - Transaction management
+
+3. **Repository Layer** (Data Access)
+
+   - TweetRepository: Database operations
+   - Pagination handling
+   - Sorting implementation
+
+4. **Model Layer** (Data Entities)
+   - Tweet: Database entity
+   - Relationships with User entity
+
+#### Database Schema
+
+```sql
+CREATE TABLE tweets (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    content VARCHAR(280) NOT NULL,
+    timestamp DATETIME NOT NULL,
+    user_id BIGINT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Indexes
+CREATE INDEX idx_tweets_timestamp ON tweets(timestamp DESC);
+CREATE INDEX idx_tweets_user_id ON tweets(user_id);
 ```
 
-This flow diagram focuses on the user login process:
+## Security Architecture
 
-1.  The user submits a login request.
-2.  The `AuthController` delegates authentication to `AuthService`.
-3.  `AuthService` retrieves the user from the database.
-4.  The provided password is checked against the stored password.
-5.  If successful, a JWT is generated and a session is created.
-6.  A token is returned to the user.
-7.  If unsuccessful, an error is returned.
+### Authentication Flow
+
+1. JWT token required for all tweet operations
+2. Token validated through JwtRequestFilter
+3. User identity extracted from token
+4. Authorization checks performed at endpoint level
+
+### Security Measures
+
+- CORS configuration for frontend access
+- Request rate limiting
+- Input validation and sanitization
+- SQL injection prevention through JPA
+- XSS protection
+
+## API Endpoints
+
+### Tweet Management
+
+```
+POST /api/tweets
+- Creates new tweet
+- Requires authenticated user
+- Request body: { "content": "string" }
+- Returns: Tweet object
+
+GET /api/tweets?page={page}&size={size}
+- Retrieves paginated tweets
+- Requires authenticated user
+- Query params: page (default 0), size (default 10)
+- Returns: Page<Tweet> object
+```
+
+## Data Structures and Algorithms
+
+### Database Indexing
+
+- B-tree index on timestamp for efficient sorting
+- B-tree index on user_id for relationship queries
+
+### Pagination Implementation
+
+- Offset-based pagination using Spring Data
+- Configurable page size
+- Sort by timestamp in descending order
+
+## Performance Considerations
+
+### Database Optimization
+
+- Indexed queries for efficient retrieval
+- Lazy loading of user relationships
+- Connection pooling
+
+### Caching Strategy
+
+- Consider implementing Redis for:
+  - Frequently accessed tweets
+  - User data caching
+  - Rate limiting implementation
+
+### Frontend Optimization
+
+- Pagination to limit data transfer
+- Debounced API calls
+- Optimistic UI updates
+
+## Error Handling
+
+### Frontend Error Handling
+
+- Form validation errors
+- API error responses
+- Network error handling
+- Loading states
+
+### Backend Error Handling
+
+- Global exception handler
+- Custom error responses
+- Validation error handling
+- Database error handling
+
+## Testing Strategy
+
+### Frontend Testing
+
+- Component unit tests
+- Integration tests
+- E2E tests with Cypress
+
+### Backend Testing
+
+- Unit tests for services
+- Integration tests for controllers
+- Repository layer tests
+- Security tests
+
+## Future Enhancements
+
+### Potential Features
+
+1. Tweet deletion
+2. Tweet editing
+3. User mentions
+4. Hashtag support
+5. Media attachments
+
+### Scalability Considerations
+
+1. Implement caching layer
+2. Message queue for async operations
+3. CDN for media content
+4. Database sharding strategy
