@@ -4,12 +4,12 @@ import com.auth.model.Tweet;
 import com.auth.service.TweetService;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -46,21 +46,38 @@ public class TweetController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<Tweet>> getTweets(
-        @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "10") int size
+    public ResponseEntity<List<Tweet>> getTweets(
+        @RequestParam(required = false) Long startId,
+        @RequestParam(defaultValue = "10") int size,
+        @RequestParam(required = false) Boolean newer
     ) {
-        return ResponseEntity.ok(tweetService.getTweets(page, size));
+        List<Tweet> tweets;
+        if (startId == null) {
+            tweets = tweetService.getInitialTweets(size);
+        } else {
+            tweets = Boolean.TRUE.equals(newer)
+                ? tweetService.getNewerTweets(startId, size)
+                : tweetService.getOlderTweets(startId, size);
+        }
+        return ResponseEntity.ok(tweets);
     }
 
     @GetMapping("/user/{username}")
     public ResponseEntity<?> getUserTweets(
         @PathVariable String username,
-        @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "10") int size
+        @RequestParam(required = false) Long startId,
+        @RequestParam(defaultValue = "10") int size,
+        @RequestParam(required = false) Boolean newer
     ) {
         try {
-            Page<Tweet> tweets = tweetService.getUserTweets(username, page, size);
+            List<Tweet> tweets;
+            if (startId == null) {
+                tweets = tweetService.getInitialUserTweets(username, size);
+            } else {
+                tweets = Boolean.TRUE.equals(newer)
+                    ? tweetService.getNewerUserTweets(username, startId, size)
+                    : tweetService.getOlderUserTweets(username, startId, size);
+            }
             return ResponseEntity.ok(tweets);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest()

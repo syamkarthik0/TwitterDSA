@@ -27,13 +27,12 @@ function App() {
   const validateToken = async (token) => {
     try {
       const response = await fetch("http://localhost:8080/api/auth/validate", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
       setIsAuthenticated(data.valid);
     } catch (error) {
+      console.error("Token validation failed:", error);
       setIsAuthenticated(false);
       localStorage.removeItem("token");
     } finally {
@@ -66,7 +65,6 @@ function App() {
             </button>
           )}
         </header>
-
         <main className="app-main">
           <Routes>
             <Route
@@ -172,10 +170,7 @@ function Login({ onLogin }) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          username,
-          password,
-        }),
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await response.json();
@@ -257,11 +252,7 @@ function Register({ onRegister }) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          username,
-          password,
-          role: "USER",
-        }),
+        body: JSON.stringify({ username, password, role: "USER" }),
       });
 
       const data = await response.json();
@@ -295,7 +286,6 @@ function Register({ onRegister }) {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            minLength="3"
           />
         </div>
         <div className="form-group">
@@ -305,7 +295,6 @@ function Register({ onRegister }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength="6"
           />
         </div>
         <button type="submit" disabled={isLoading}>
@@ -347,109 +336,44 @@ import '@testing-library/jest-dom';
 
 
 // Content from src\components\Dashboard.js
-import React, { useState, useEffect, useCallback } from "react";
-import Tweet from "./Tweet";
+import React, { useState, useEffect } from "react";
 import TweetForm from "./TweetForm";
+import Tweet from "./Tweet";
 import "./Dashboard.css";
 
 function Dashboard() {
   const [tweets, setTweets] = useState([]);
-  const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  const loadTweets = useCallback(async () => {
+  const fetchTweets = async () => {
     setIsLoading(true);
-    setError("");
+    const token = localStorage.getItem("token");
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `http://localhost:8080/api/tweets?page=${page}&size=10`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch tweets");
-      }
-
+      const response = await fetch("http://localhost:8080/api/tweets", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await response.json();
-      setTweets(data.content);
-      setTotalPages(data.totalPages);
-    } catch (err) {
-      setError("Failed to load tweets. Please try again later.");
-      console.error("Error loading tweets:", err);
+      setTweets(data);
+    } catch (error) {
+      console.error("Error fetching tweets:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [page]);
+  };
 
   useEffect(() => {
-    loadTweets();
-  }, [loadTweets]);
-
-  const handleTweetPosted = () => {
-    setPage(0); // Reset to first page
-    loadTweets();
-  };
-
-  const handlePreviousPage = () => {
-    setPage((current) => Math.max(0, current - 1));
-  };
-
-  const handleNextPage = () => {
-    setPage((current) => Math.min(totalPages - 1, current + 1));
-  };
+    fetchTweets();
+  }, []);
 
   return (
     <div className="dashboard">
-      <div className="dashboard-content">
-        <TweetForm onTweetPosted={handleTweetPosted} />
-
-        {error && <div className="error-message">{error}</div>}
-
-        {isLoading ? (
-          <div className="loading">Loading tweets...</div>
-        ) : (
-          <>
-            <div className="tweet-list">
-              {tweets.length === 0 ? (
-                <div className="no-tweets">
-                  No tweets yet. Be the first to tweet!
-                </div>
-              ) : (
-                tweets.map((tweet) => <Tweet key={tweet.id} tweet={tweet} />)
-              )}
-            </div>
-
-            {tweets.length > 0 && (
-              <div className="pagination">
-                <button
-                  onClick={handlePreviousPage}
-                  disabled={page === 0}
-                  className="pagination-button"
-                >
-                  Previous
-                </button>
-                <span className="page-info">
-                  Page {page + 1} of {totalPages}
-                </span>
-                <button
-                  onClick={handleNextPage}
-                  disabled={page >= totalPages - 1}
-                  className="pagination-button"
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </>
-        )}
+      <TweetForm onTweetPosted={fetchTweets} />
+      <div className="tweet-list">
+        {tweets.map((tweet) => (
+          <Tweet key={tweet.id} tweet={tweet} />
+        ))}
       </div>
+      {isLoading && <div>Loading...</div>}
     </div>
   );
 }
@@ -562,5 +486,91 @@ function TweetForm({ onTweetPosted }) {
 }
 
 export default TweetForm;
+
+
+// Content from src\utils\LinkedList.js
+class Node {
+  constructor(tweet) {
+    this.tweet = tweet;
+    this.next = null;
+    this.prev = null;
+  }
+}
+
+export class LinkedList {
+  constructor() {
+    this.head = null;
+    this.tail = null;
+    this.size = 0;
+    this.tweetIds = new Set(); // Track tweet IDs to prevent duplicates
+  }
+
+  append(tweet) {
+    // Skip if tweet already exists
+    if (this.tweetIds.has(tweet.id)) {
+      return;
+    }
+
+    const newNode = new Node(tweet);
+    this.tweetIds.add(tweet.id);
+    this.size++;
+
+    if (!this.head) {
+      this.head = newNode;
+      this.tail = newNode;
+      return;
+    }
+
+    newNode.prev = this.tail;
+    this.tail.next = newNode;
+    this.tail = newNode;
+  }
+
+  prepend(tweet) {
+    // Skip if tweet already exists
+    if (this.tweetIds.has(tweet.id)) {
+      return;
+    }
+
+    const newNode = new Node(tweet);
+    this.tweetIds.add(tweet.id);
+    this.size++;
+
+    if (!this.head) {
+      this.head = newNode;
+      this.tail = newNode;
+      return;
+    }
+
+    newNode.next = this.head;
+    this.head.prev = newNode;
+    this.head = newNode;
+  }
+
+  appendList(tweets) {
+    tweets.forEach((tweet) => this.append(tweet));
+  }
+
+  prependList(tweets) {
+    [...tweets].reverse().forEach((tweet) => this.prepend(tweet));
+  }
+
+  clear() {
+    this.head = null;
+    this.tail = null;
+    this.size = 0;
+    this.tweetIds.clear();
+  }
+
+  toArray() {
+    const array = [];
+    let current = this.head;
+    while (current) {
+      array.push(current.tweet);
+      current = current.next;
+    }
+    return array;
+  }
+}
 
 

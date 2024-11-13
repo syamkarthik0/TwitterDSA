@@ -5,8 +5,9 @@
 }
 
 .dashboard-content {
-  background-color: #f7f9fa;
+  background: white;
   border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   padding: 20px;
 }
 
@@ -14,79 +15,57 @@
   margin-top: 20px;
 }
 
-.loading {
+.no-tweets {
   text-align: center;
   padding: 20px;
-  color: #657786;
+  color: #666;
+  font-style: italic;
 }
 
 .error-message {
-  background-color: #ffd1d1;
-  color: #e0245e;
+  background-color: #ffebee;
+  color: #c62828;
   padding: 10px;
   border-radius: 4px;
   margin: 10px 0;
   text-align: center;
 }
 
-.no-tweets {
+.loading {
   text-align: center;
-  padding: 40px;
-  color: #657786;
-  background-color: white;
-  border-radius: 8px;
-  border: 1px dashed #ccd6dd;
+  padding: 20px;
+  color: #666;
 }
 
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 20px;
-  padding: 10px;
+.loading-trigger {
+  height: 20px;
+  margin: 20px 0;
 }
 
-.pagination-button {
-  background-color: #1da1f2;
-  color: white;
-  border: none;
-  border-radius: 9999px;
-  padding: 8px 16px;
-  margin: 0 10px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+/* Smooth loading animation */
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
 }
 
-.pagination-button:hover:not(:disabled) {
-  background-color: #1991db;
+.loading {
+  animation: pulse 1.5s infinite ease-in-out;
 }
 
-.pagination-button:disabled {
-  background-color: #9bd1f9;
-  cursor: not-allowed;
-}
-
-.page-info {
-  color: #657786;
-  font-size: 14px;
-}
-
+/* Responsive design */
 @media (max-width: 600px) {
   .dashboard {
     padding: 10px;
   }
 
   .dashboard-content {
-    padding: 10px;
-  }
-
-  .pagination {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .pagination-button {
-    width: 100%;
-    margin: 5px 0;
+    padding: 15px;
   }
 }

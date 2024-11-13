@@ -1,106 +1,100 @@
-import React, { useState, useEffect, useCallback } from "react";
-import Tweet from "./Tweet";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import TweetForm from "./TweetForm";
+import Tweet from "./Tweet";
 import "./Dashboard.css";
 
 function Dashboard() {
   const [tweets, setTweets] = useState([]);
-  const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [hasMore, setHasMore] = useState(true);
+  const [lastTweetId, setLastTweetId] = useState(null); // Track the last loaded tweet's ID
+  const observer = useRef();
 
-  const loadTweets = useCallback(async () => {
+  const fetchTweets = async (startId = null) => {
+    if (isLoading) return;
+
     setIsLoading(true);
-    setError("");
+    const token = localStorage.getItem("token");
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `http://localhost:8080/api/tweets?page=${page}&size=10`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const url = new URL("http://localhost:8080/api/tweets");
+      if (startId) {
+        url.searchParams.append("startId", startId);
+      }
+      url.searchParams.append("size", "10");
+
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch tweets");
       }
 
       const data = await response.json();
-      setTweets(data.content);
-      setTotalPages(data.totalPages);
-    } catch (err) {
-      setError("Failed to load tweets. Please try again later.");
-      console.error("Error loading tweets:", err);
+
+      if (data.length === 0) {
+        setHasMore(false); // No more tweets to load
+      } else {
+        setTweets((prevTweets) => [...prevTweets, ...data]);
+        setLastTweetId(data[data.length - 1].id); // Update last loaded tweet's ID
+      }
+    } catch (error) {
+      console.error("Error fetching tweets:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [page]);
+  };
 
+  // Initial load
   useEffect(() => {
-    loadTweets();
-  }, [loadTweets]);
+    fetchTweets();
+  }, []);
 
-  const handleTweetPosted = () => {
-    setPage(0); // Reset to first page
-    loadTweets();
-  };
+  const lastTweetElementRef = useCallback(
+    (node) => {
+      if (isLoading) return;
+      if (observer.current) observer.current.disconnect();
 
-  const handlePreviousPage = () => {
-    setPage((current) => Math.max(0, current - 1));
-  };
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasMore) {
+          fetchTweets(lastTweetId); // Load more tweets
+        }
+      });
 
-  const handleNextPage = () => {
-    setPage((current) => Math.min(totalPages - 1, current + 1));
+      if (node) observer.current.observe(node);
+    },
+    [isLoading, hasMore, lastTweetId]
+  );
+
+  const handleTweetPosted = async () => {
+    setTweets([]); // Reset tweets
+    setHasMore(true);
+    setLastTweetId(null); // Reset pagination
+    await fetchTweets(); // Reload tweets
   };
 
   return (
     <div className="dashboard">
-      <div className="dashboard-content">
-        <TweetForm onTweetPosted={handleTweetPosted} />
+      <TweetForm onTweetPosted={handleTweetPosted} />
 
-        {error && <div className="error-message">{error}</div>}
-
-        {isLoading ? (
-          <div className="loading">Loading tweets...</div>
-        ) : (
-          <>
-            <div className="tweet-list">
-              {tweets.length === 0 ? (
-                <div className="no-tweets">
-                  No tweets yet. Be the first to tweet!
-                </div>
-              ) : (
-                tweets.map((tweet) => <Tweet key={tweet.id} tweet={tweet} />)
-              )}
-            </div>
-
-            {tweets.length > 0 && (
-              <div className="pagination">
-                <button
-                  onClick={handlePreviousPage}
-                  disabled={page === 0}
-                  className="pagination-button"
-                >
-                  Previous
-                </button>
-                <span className="page-info">
-                  Page {page + 1} of {totalPages}
-                </span>
-                <button
-                  onClick={handleNextPage}
-                  disabled={page >= totalPages - 1}
-                  className="pagination-button"
-                >
-                  Next
-                </button>
+      <div className="tweet-list">
+        {tweets.map((tweet, index) => {
+          if (tweets.length === index + 1) {
+            return (
+              <div ref={lastTweetElementRef} key={tweet.id}>
+                <Tweet tweet={tweet} />
               </div>
-            )}
-          </>
-        )}
+            );
+          } else {
+            return <Tweet key={tweet.id} tweet={tweet} />;
+          }
+        })}
       </div>
+
+      {isLoading && <div className="loading">Loading...</div>}
+      {!hasMore && (
+        <div className="no-more-tweets">No more tweets to display.</div>
+      )}
     </div>
   );
 }

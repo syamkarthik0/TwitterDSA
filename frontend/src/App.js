@@ -26,13 +26,12 @@ function App() {
   const validateToken = async (token) => {
     try {
       const response = await fetch("http://localhost:8080/api/auth/validate", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
       setIsAuthenticated(data.valid);
     } catch (error) {
+      console.error("Token validation failed:", error);
       setIsAuthenticated(false);
       localStorage.removeItem("token");
     } finally {
@@ -65,7 +64,6 @@ function App() {
             </button>
           )}
         </header>
-
         <main className="app-main">
           <Routes>
             <Route

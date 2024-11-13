@@ -2,6 +2,7 @@ package com.auth.security;
 
 import com.auth.service.SessionManager;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -42,9 +43,25 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 username = jwtUtil.extractUsername(jwt);
             } catch (ExpiredJwtException e) {
                 logger.warn("JWT Token has expired");
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("JWT Token has expired");
+                return;
+            } catch (MalformedJwtException e) {
+                logger.error("Malformed JWT Token");
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write("Malformed JWT Token");
+                return;
+            } catch (Exception e) {
+                logger.error("Invalid JWT Token");
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write("Invalid JWT Token");
+                return;
             }
+        } else {
+            logger.warn("Authorization header is missing or does not start with Bearer");
         }
 
+        // Authenticate the user
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             if (sessionManager.isSessionValid(username, jwt)) {
                 UserDetails userDetails = new User(username, "", new ArrayList<>());

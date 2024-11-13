@@ -140,12 +140,12 @@ import com.auth.model.Tweet;
 import com.auth.service.TweetService;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -182,21 +182,38 @@ public class TweetController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<Tweet>> getTweets(
-        @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "10") int size
+    public ResponseEntity<List<Tweet>> getTweets(
+        @RequestParam(required = false) Long startId,
+        @RequestParam(defaultValue = "10") int size,
+        @RequestParam(required = false) Boolean newer
     ) {
-        return ResponseEntity.ok(tweetService.getTweets(page, size));
+        List<Tweet> tweets;
+        if (startId == null) {
+            tweets = tweetService.getInitialTweets(size);
+        } else {
+            tweets = Boolean.TRUE.equals(newer)
+                ? tweetService.getNewerTweets(startId, size)
+                : tweetService.getOlderTweets(startId, size);
+        }
+        return ResponseEntity.ok(tweets);
     }
 
     @GetMapping("/user/{username}")
     public ResponseEntity<?> getUserTweets(
         @PathVariable String username,
-        @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "10") int size
+        @RequestParam(required = false) Long startId,
+        @RequestParam(defaultValue = "10") int size,
+        @RequestParam(required = false) Boolean newer
     ) {
         try {
-            Page<Tweet> tweets = tweetService.getUserTweets(username, page, size);
+            List<Tweet> tweets;
+            if (startId == null) {
+                tweets = tweetService.getInitialUserTweets(username, size);
+            } else {
+                tweets = Boolean.TRUE.equals(newer)
+                    ? tweetService.getNewerUserTweets(username, startId, size)
+                    : tweetService.getOlderUserTweets(username, startId, size);
+            }
             return ResponseEntity.ok(tweets);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest()
@@ -240,6 +257,7 @@ public class Tweet {
 // Content from src\main\java\com\auth\model\User.java
 package com.auth.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -250,6 +268,7 @@ import javax.persistence.*;
 @AllArgsConstructor
 @Entity
 @Table(name = "users")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -274,12 +293,29 @@ import com.auth.model.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.util.List;
 
 @Repository
 public interface TweetRepository extends JpaRepository<Tweet, Long> {
-    Page<Tweet> findAllByOrderByTimestampDesc(Pageable pageable);
     Page<Tweet> findByUserOrderByTimestampDesc(User user, Pageable pageable);
+    
+    @Query("SELECT t FROM Tweet t ORDER BY t.timestamp DESC")
+    List<Tweet> findLatestTweets(Pageable pageable);
+    
+    @Query("SELECT t FROM Tweet t WHERE t.id < :startId ORDER BY t.id DESC")
+    List<Tweet> findOlderTweets(@Param("startId") Long startId, Pageable pageable);
+    
+    @Query("SELECT t FROM Tweet t WHERE t.id > :startId ORDER BY t.id ASC")
+    List<Tweet> findNewerTweets(@Param("startId") Long startId, Pageable pageable);
+    
+    @Query("SELECT t FROM Tweet t WHERE t.user = :user AND t.id < :startId ORDER BY t.id DESC")
+    List<Tweet> findOlderTweetsByUser(@Param("user") User user, @Param("startId") Long startId, Pageable pageable);
+    
+    @Query("SELECT t FROM Tweet t WHERE t.user = :user AND t.id > :startId ORDER BY t.id ASC")
+    List<Tweet> findNewerTweetsByUser(@Param("user") User user, @Param("startId") Long startId, Pageable pageable);
 }
 
 
@@ -303,6 +339,7 @@ package com.auth.security;
 
 import com.auth.service.SessionManager;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -343,9 +380,25 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 username = jwtUtil.extractUsername(jwt);
             } catch (ExpiredJwtException e) {
                 logger.warn("JWT Token has expired");
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("JWT Token has expired");
+                return;
+            } catch (MalformedJwtException e) {
+                logger.error("Malformed JWT Token");
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write("Malformed JWT Token");
+                return;
+            } catch (Exception e) {
+                logger.error("Invalid JWT Token");
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write("Invalid JWT Token");
+                return;
             }
+        } else {
+            logger.warn("Authorization header is missing or does not start with Bearer");
         }
 
+        // Authenticate the user
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             if (sessionManager.isSessionValid(username, jwt)) {
                 UserDetails userDetails = new User(username, "", new ArrayList<>());
@@ -369,6 +422,7 @@ package com.auth.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.MalformedJwtException;
 import org.springframework.stereotype.Component;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -396,6 +450,9 @@ public class JwtUtil {
     }
 
     private Claims extractAllClaims(String token) {
+        if (token == null || token.trim().isEmpty()) {
+            throw new MalformedJwtException("Token is null or empty");
+        }
         return Jwts.parser().setSigningKey(SECRET_KEY).parseClaimsJws(token).getBody();
     }
 
@@ -572,10 +629,10 @@ import com.auth.model.User;
 import com.auth.repository.TweetRepository;
 import com.auth.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class TweetService {
@@ -604,26 +661,41 @@ public class TweetService {
         return tweetRepository.save(tweet);
     }
 
-    public Page<Tweet> getTweets(int page, int size) {
-        if (size > 50) {
-            size = 50; // Limit maximum page size
-        }
-        return tweetRepository.findAllByOrderByTimestampDesc(
-            PageRequest.of(page, size)
-        );
+    public List<Tweet> getInitialTweets(int size) {
+        if (size > 50) size = 50; // Limit maximum size
+        return tweetRepository.findLatestTweets(PageRequest.of(0, size));
     }
 
-    public Page<Tweet> getUserTweets(String username, int page, int size) {
+    public List<Tweet> getOlderTweets(Long startId, int size) {
+        if (size > 50) size = 50;
+        return tweetRepository.findOlderTweets(startId, PageRequest.of(0, size));
+    }
+
+    public List<Tweet> getNewerTweets(Long startId, int size) {
+        if (size > 50) size = 50;
+        return tweetRepository.findNewerTweets(startId, PageRequest.of(0, size));
+    }
+
+    public List<Tweet> getInitialUserTweets(String username, int size) {
+        if (size > 50) size = 50;
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new RuntimeException("User not found"));
-            
-        if (size > 50) {
-            size = 50; // Limit maximum page size
-        }
-        return tweetRepository.findByUserOrderByTimestampDesc(
-            user,
-            PageRequest.of(page, size)
-        );
+        return tweetRepository.findByUserOrderByTimestampDesc(user, PageRequest.of(0, size))
+            .getContent();
+    }
+
+    public List<Tweet> getOlderUserTweets(String username, Long startId, int size) {
+        if (size > 50) size = 50;
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        return tweetRepository.findOlderTweetsByUser(user, startId, PageRequest.of(0, size));
+    }
+
+    public List<Tweet> getNewerUserTweets(String username, Long startId, int size) {
+        if (size > 50) size = 50;
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        return tweetRepository.findNewerTweetsByUser(user, startId, PageRequest.of(0, size));
     }
 }
 

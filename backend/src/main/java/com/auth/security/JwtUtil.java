@@ -3,6 +3,7 @@ package com.auth.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.MalformedJwtException;
 import org.springframework.stereotype.Component;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -30,6 +31,9 @@ public class JwtUtil {
     }
 
     private Claims extractAllClaims(String token) {
+        if (token == null || token.trim().isEmpty()) {
+            throw new MalformedJwtException("Token is null or empty");
+        }
         return Jwts.parser().setSigningKey(SECRET_KEY).parseClaimsJws(token).getBody();
     }
 

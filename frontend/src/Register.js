@@ -20,11 +20,7 @@ function Register({ onRegister }) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          username,
-          password,
-          role: "USER",
-        }),
+        body: JSON.stringify({ username, password, role: "USER" }),
       });
 
       const data = await response.json();
@@ -58,7 +54,6 @@ function Register({ onRegister }) {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            minLength="3"
           />
         </div>
         <div className="form-group">
@@ -68,7 +63,6 @@ function Register({ onRegister }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength="6"
           />
         </div>
         <button type="submit" disabled={isLoading}>

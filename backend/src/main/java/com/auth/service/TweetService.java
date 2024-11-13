@@ -5,10 +5,10 @@ import com.auth.model.User;
 import com.auth.repository.TweetRepository;
 import com.auth.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class TweetService {
@@ -37,25 +37,40 @@ public class TweetService {
         return tweetRepository.save(tweet);
     }
 
-    public Page<Tweet> getTweets(int page, int size) {
-        if (size > 50) {
-            size = 50; // Limit maximum page size
-        }
-        return tweetRepository.findAllByOrderByTimestampDesc(
-            PageRequest.of(page, size)
-        );
+    public List<Tweet> getInitialTweets(int size) {
+        if (size > 50) size = 50; // Limit maximum size
+        return tweetRepository.findLatestTweets(PageRequest.of(0, size));
     }
 
-    public Page<Tweet> getUserTweets(String username, int page, int size) {
+    public List<Tweet> getOlderTweets(Long startId, int size) {
+        if (size > 50) size = 50;
+        return tweetRepository.findOlderTweets(startId, PageRequest.of(0, size));
+    }
+
+    public List<Tweet> getNewerTweets(Long startId, int size) {
+        if (size > 50) size = 50;
+        return tweetRepository.findNewerTweets(startId, PageRequest.of(0, size));
+    }
+
+    public List<Tweet> getInitialUserTweets(String username, int size) {
+        if (size > 50) size = 50;
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new RuntimeException("User not found"));
-            
-        if (size > 50) {
-            size = 50; // Limit maximum page size
-        }
-        return tweetRepository.findByUserOrderByTimestampDesc(
-            user,
-            PageRequest.of(page, size)
-        );
+        return tweetRepository.findByUserOrderByTimestampDesc(user, PageRequest.of(0, size))
+            .getContent();
+    }
+
+    public List<Tweet> getOlderUserTweets(String username, Long startId, int size) {
+        if (size > 50) size = 50;
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        return tweetRepository.findOlderTweetsByUser(user, startId, PageRequest.of(0, size));
+    }
+
+    public List<Tweet> getNewerUserTweets(String username, Long startId, int size) {
+        if (size > 50) size = 50;
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        return tweetRepository.findNewerTweetsByUser(user, startId, PageRequest.of(0, size));
     }
 }
