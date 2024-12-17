@@ -8,14 +8,14 @@ import {
 import Login from "./Login";
 import Register from "./Register";
 import CacheMonitor from "./components/CacheMonitor";
-import TweetList from "./components/TweetList";
-import CreateTweet from "./components/CreateTweet";
+import Feed from "./components/Feed";
+import UserProfile from "./components/UserProfile";
+import DiscoverUsers from "./components/DiscoverUsers";
 import "./App.css";
 
-// Simple Dashboard component
+// Dashboard component with new Feed
 const Dashboard = () => {
   const [username, setUsername] = React.useState("");
-  const [tweets, setTweets] = React.useState([]);
 
   const handleLogout = async () => {
     try {
@@ -37,10 +37,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleTweetCreated = (newTweet) => {
-    setTweets((prevTweets) => [newTweet, ...prevTweets]);
-  };
-
   React.useEffect(() => {
     const storedUsername = localStorage.getItem("username");
     if (storedUsername) {
@@ -50,18 +46,18 @@ const Dashboard = () => {
 
   return (
     <div style={styles.dashboard}>
-      <h1>Welcome, {username}!</h1>
-      <p>You have successfully logged in to the protected dashboard.</p>
-      <button onClick={handleLogout} style={styles.logoutButton}>
-        Logout
-      </button>
+      <div style={styles.header}>
+        <h1>Welcome, {username}!</h1>
+        <button onClick={handleLogout} style={styles.logoutButton}>
+          Logout
+        </button>
+      </div>
       <div style={styles.content}>
-        <div style={styles.tweetsSection}>
-          <CreateTweet onTweetCreated={handleTweetCreated} />
-          <TweetList tweets={tweets} setTweets={setTweets} />
+        <div style={styles.feed}>
+          <Feed />
         </div>
-        <div style={styles.cacheSection}>
-          <CacheMonitor />
+        <div style={styles.discover}>
+          <DiscoverUsers />
         </div>
       </div>
     </div>
@@ -71,15 +67,13 @@ const Dashboard = () => {
 // Protected Route component
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("token");
-
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" />;
   }
-
   return children;
 };
 
-function App() {
+const App = () => {
   return (
     <Router>
       <div style={styles.container}>
@@ -87,19 +81,34 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route
-            path="/dashboard"
+            path="/"
             element={
               <ProtectedRoute>
                 <Dashboard />
               </ProtectedRoute>
             }
           />
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route
+            path="/profile/:username"
+            element={
+              <ProtectedRoute>
+                <UserProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cache"
+            element={
+              <ProtectedRoute>
+                <CacheMonitor />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </div>
     </Router>
   );
-}
+};
 
 const styles = {
   container: {
@@ -108,38 +117,36 @@ const styles = {
   },
   dashboard: {
     padding: "20px",
-    maxWidth: "1200px",
-    margin: "0 auto",
-    backgroundColor: "white",
-    borderRadius: "8px",
-    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "20px",
   },
   content: {
-    display: "grid",
-    gridTemplateColumns: "2fr 1fr",
-    gap: "20px",
-    marginTop: "20px",
-  },
-  tweetsSection: {
     display: "flex",
-    flexDirection: "column",
     gap: "20px",
+    flexDirection: "row",
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "0 20px"
   },
-  cacheSection: {
-    minWidth: "300px",
+  feed: {
+    flex: "2"
+  },
+  discover: {
+    flex: "1",
+    minWidth: "300px"
   },
   logoutButton: {
     padding: "10px 20px",
-    backgroundColor: "#dc3545",
+    backgroundColor: "#1DA1F2",
     color: "white",
     border: "none",
-    borderRadius: "4px",
+    borderRadius: "20px",
     cursor: "pointer",
-    fontSize: "16px",
-    marginTop: "20px",
-    ":hover": {
-      backgroundColor: "#c82333",
-    },
+    fontWeight: "bold",
   },
 };
 

@@ -39,12 +39,13 @@ const Login = () => {
         throw new Error(data.error || "Login failed");
       }
 
-      // Store token in localStorage
+      // Store token and user info in localStorage
       localStorage.setItem("token", data.token);
       localStorage.setItem("username", data.username);
+      localStorage.setItem("userId", data.userId);
 
-      // Redirect to dashboard
-      navigate("/dashboard");
+      // Redirect to home page
+      navigate("/");
     } catch (err) {
       setError(err.message || "An error occurred during login");
     } finally {
