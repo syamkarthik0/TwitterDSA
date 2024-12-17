@@ -1,0 +1,64 @@
+# Frontend specific
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+frontend/coverage/
+frontend/build/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Backend specific
+backend/target/
+backend/out/
+backend/*.class
+backend/.mvn/
+backend/pom.xml.tag
+backend/pom.xml.releaseBackup
+backend/pom.xml.versionsBackup
+backend/pom.xml.next
+backend/release.properties
+
+# IDE specific
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+*.springBeans
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS specific
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+Desktop.ini
+
+# Logs and databases
+*.log
+*.h2.db
+*.mv.db
+*.db.mv.db
+*.db.trace.db
+
+# Temporary files
+*.tmp
+/tmp/
+
+# Package files
+*.jar
+*.war
+*.ear
+*.jks
+*.p12
+
+# Python files
+*.py

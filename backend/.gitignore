@@ -1,0 +1,101 @@
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+
+# Maven build directories
+/target/
+/out/
+
+# Gradle build directories
+/build/
+
+# Local environment files
+.env
+
+# IntelliJ IDEA files
+.idea/
+*.iml
+
+# Eclipse and STS files
+.project
+.classpath
+.settings/
+*.springBeans
+
+# VSCode files
+.vscode/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# JetBrains IDE (IntelliJ, PyCharm) specific
+*.idea/*
+!*.idea/inspectionProfiles
+*.iml
+out/
+
+# Maven specific
+.mvn/
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Gradle specific
+.gradle/
+/build/
+
+# Linux/Mac generated files
+*.swp
+*.swo
+
+# Windows generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Spring Boot generated files
+*.jar
+*.war
+*.ear
+
+# Logs
+/logs/
+*.log
+
+# Database
+*.h2.db
+*.mv.db
+*.db.mv.db
+*.db.trace.db
+
+# Temporary files
+/tmp/
+*.tmp
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# Keystore files
+*.jks
+*.p12
+
+# Node specific files (if you use npm/yarn for frontend)
+node_modules/
+yarn-error.log
+yarn.lock
+
+# Generated files from Swagger or OpenAPI
+*.json
+*.yaml
+*.py
