@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -68,11 +69,13 @@ public class AuthService {
     // Authenticate a user with username and password
     public Optional<User> authenticate(String username, String password) {
         logger.info("Authenticating user with username: {}", username);
+        logger.debug("Raw password received: {}", password);
 
         // First, check the cache for the user
         User cachedUser = cacheService.getUserByUsername(username);
         if (cachedUser != null) {
             logger.info("User {} found in cache", username);
+            logger.debug("Stored password hash from cache: {}", cachedUser.getPassword());
 
             if (passwordEncoder.matches(password, cachedUser.getPassword())) {
                 logger.info("Authentication successful for user {} via cache", username);
@@ -88,7 +91,8 @@ public class AuthService {
         Optional<User> userOpt = userRepository.findByUsername(username);
         if (userOpt.isPresent()) {
             logger.info("User {} found in database", username);
-
+            logger.debug("Stored password hash from database: {}", userOpt.get().getPassword());
+            
             if (passwordEncoder.matches(password, userOpt.get().getPassword())) {
                 logger.info("Authentication successful for user {} via database", username);
 
@@ -115,13 +119,7 @@ public class AuthService {
     }
 
     // Fetch all users (cached or from the database)
-    public Iterable<User> getAllUsers() {
-        if (cacheService.isCacheEmpty()) {
-            logger.info("Cache is empty. Fetching all users from the database...");
-            return userRepository.findAll();
-        } else {
-            logger.info("Fetching all users from the cache...");
-            return cacheService.getAllUsersFromCache();
-        }
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
     }
 }

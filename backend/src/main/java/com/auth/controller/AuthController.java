@@ -4,6 +4,8 @@ import com.auth.model.User;
 import com.auth.security.JwtUtil;
 import com.auth.service.AuthService;
 import com.auth.service.SessionManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -16,6 +18,8 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     @Autowired
     private AuthService authService;
@@ -40,10 +44,14 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
         String username = credentials.get("username");
         String password = credentials.get("password");
+        
+        logger.debug("Login attempt - Username: {}, Password length: {}", username, password != null ? password.length() : "null");
+        logger.debug("Raw credentials received: {}", credentials);
 
         Optional<User> userOpt = authService.authenticate(username, password);
         
         if (userOpt.isPresent()) {
+            User user = userOpt.get();
             UserDetails userDetails = org.springframework.security.core.userdetails.User
                 .withUsername(username)
                 .password("")
@@ -56,6 +64,7 @@ public class AuthController {
             Map<String, Object> response = new HashMap<>();
             response.put("token", token);
             response.put("username", username);
+            response.put("userId", user.getId());
             return ResponseEntity.ok(response);
         }
 
