@@ -10,6 +10,7 @@ const Feed = () => {
     const [error, setError] = useState('');
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
+    const currentUsername = localStorage.getItem('username');
 
     const loadTweets = useCallback(async () => {
         try {
@@ -17,10 +18,13 @@ const Feed = () => {
             const response = await getFeed(page);
             const newTweets = response.content || [];
             
+            // Extract tweets from UserFeed objects
+            const processedTweets = newTweets.map(feedItem => feedItem.tweet);
+            
             if (page === 0) {
-                setTweets(newTweets);
+                setTweets(processedTweets);
             } else {
-                setTweets(prev => [...prev, ...newTweets]);
+                setTweets(prev => [...prev, ...processedTweets]);
             }
             
             setHasMore(!response.last);
@@ -75,7 +79,7 @@ const Feed = () => {
                 <Box>
                     {tweets.map(tweet => (
                         <Box key={tweet.id} sx={{ marginBottom: 2 }}>
-                            <Tweet tweet={tweet} />
+                            <Tweet tweet={tweet} username={currentUsername} />
                         </Box>
                     ))}
 
