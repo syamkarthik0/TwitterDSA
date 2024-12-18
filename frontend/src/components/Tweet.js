@@ -3,7 +3,13 @@ import { Link } from 'react-router-dom';
 import FollowButton from './FollowButton';
 
 const Tweet = ({ tweet, username: currentUsername }) => {
+    // Add null checks
+    if (!tweet || !tweet.user) {
+        return null;
+    }
+
     const isOwnTweet = tweet.user.username === currentUsername;
+    // Use timestamp from backend
     const formattedDate = new Date(tweet.timestamp).toLocaleString();
 
     return (
@@ -15,7 +21,7 @@ const Tweet = ({ tweet, username: currentUsername }) => {
                 >
                     {tweet.user.username}
                 </Link>
-                {!isOwnTweet && (
+                {!isOwnTweet && tweet.user.id && (
                     <FollowButton userId={tweet.user.id} />
                 )}
             </div>
