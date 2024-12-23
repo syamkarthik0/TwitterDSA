@@ -15,7 +15,7 @@ const CacheMonitor = () => {
           console.error('No authentication token found');
           return;
         }
-        const response = await axios.get('http://localhost:8080/api/cache/stats', {
+        const response = await axios.get('http://localhost:8081/api/cache/stats', {
           headers: {
             'Authorization': `Bearer ${token}`
           }

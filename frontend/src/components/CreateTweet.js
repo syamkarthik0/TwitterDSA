@@ -24,7 +24,7 @@ const CreateTweet = ({ onTweetCreated }) => {
         return;
       }
 
-      const response = await axios.post('http://localhost:8080/api/tweets', 
+      const response = await axios.post('http://localhost:8081/api/tweets', 
         { content },
         {
           headers: {
