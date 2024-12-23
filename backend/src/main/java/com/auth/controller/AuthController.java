@@ -73,12 +73,22 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestHeader("Authorization") String token) {
-        if (token != null && token.startsWith("Bearer ")) {
-            String jwt = token.substring(7);
-            String username = jwtUtil.extractUsername(jwt);
-            authService.logout(username);
-            return ResponseEntity.ok().body(Map.of("message", "Logged out successfully"));
+        try {
+            if (token != null && token.startsWith("Bearer ")) {
+                String jwt = token.substring(7);
+                String username = jwtUtil.extractUsername(jwt);
+                
+                // Even if token is expired, try to logout the user
+                if (username != null) {
+                    authService.logout(username);
+                    return ResponseEntity.ok().body(Map.of("message", "Logged out successfully"));
+                }
+            }
+            return ResponseEntity.ok().body(Map.of("message", "Logged out"));
+        } catch (Exception e) {
+            logger.error("Error during logout: {}", e.getMessage());
+            // Still return OK to ensure client proceeds with logout
+            return ResponseEntity.ok().body(Map.of("message", "Logged out"));
         }
-        return ResponseEntity.badRequest().body(Map.of("error", "Invalid token"));
     }
 }

@@ -18,22 +18,26 @@ const Dashboard = () => {
   const [username, setUsername] = React.useState("");
 
   const handleLogout = async () => {
-    try {
-      const response = await fetch("http://localhost:8081/api/auth/logout", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        credentials: "include",
-      });
+    const token = localStorage.getItem("token");
+    
+    // Always clear local storage first
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
 
-      if (response.ok) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("username");
-        window.location.href = "/login";
+    try {
+      if (token) {
+        await fetch("http://localhost:8081/api/auth/logout", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          }
+        });
       }
     } catch (error) {
       console.error("Logout failed:", error);
+    } finally {
+      // Always redirect to login
+      window.location.href = "/login";
     }
   };
 
