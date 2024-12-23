@@ -1,10 +1,6 @@
 import React from "react";
-import {
-  BrowserRouter as Router,
-  Route,
-  Routes,
-  Navigate,
-} from "react-router-dom";
+import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
 import Login from "./Login";
 import Register from "./Register";
 import CacheMonitor from "./components/CacheMonitor";
@@ -12,6 +8,17 @@ import Feed from "./components/Feed";
 import UserProfile from "./components/UserProfile";
 import DiscoverUsers from "./components/DiscoverUsers";
 import "./App.css";
+
+// Function to check if the token is expired
+const isTokenExpired = (token) => {
+  if (!token) return true;
+  try {
+    const decoded = jwtDecode(token);
+    return decoded.exp * 1000 < Date.now(); // Compare token expiry with the current time
+  } catch (err) {
+    return true; // If there's an error decoding, treat it as expired
+  }
+};
 
 // Dashboard component with new Feed
 const Dashboard = () => {
@@ -30,7 +37,7 @@ const Dashboard = () => {
       if (response.ok) {
         localStorage.removeItem("token");
         localStorage.removeItem("username");
-        window.location.href = "/login";
+        window.location.href = "/login"; // Redirect to login page
       }
     } catch (error) {
       console.error("Logout failed:", error);
@@ -39,7 +46,12 @@ const Dashboard = () => {
 
   React.useEffect(() => {
     const storedUsername = localStorage.getItem("username");
-    if (storedUsername) {
+    const token = localStorage.getItem("token");
+
+    // Check if token is expired and log out if true
+    if (isTokenExpired(token)) {
+      handleLogout();
+    } else {
       setUsername(storedUsername);
     }
   }, []);
@@ -67,7 +79,11 @@ const Dashboard = () => {
 // Protected Route component
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("token");
-  if (!token) {
+
+  // Check if the token is valid or expired
+  if (!token || isTokenExpired(token)) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
     return <Navigate to="/login" />;
   }
   return children;

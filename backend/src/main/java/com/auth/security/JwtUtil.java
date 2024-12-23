@@ -20,7 +20,7 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
     private String SECRET_KEY = "your_secret_key_here";
-    private int TOKEN_VALIDITY = 3600 * 5; // 5 hours
+    private int TOKEN_VALIDITY = 60; // 5 hours
     private static final Logger logger = LoggerFactory.getLogger(JwtUtil.class);
 
     public String extractUsername(String token) {
