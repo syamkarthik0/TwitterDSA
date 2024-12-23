@@ -9,7 +9,7 @@ const TweetList = ({ tweets, setTweets }) => {
   useEffect(() => {
     const fetchTweets = async () => {
       try {
-        const response = await axios.get('http://localhost:8080/api/tweets', {
+        const response = await axios.get('http://localhost:8081/api/tweets', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }

@@ -19,7 +19,7 @@ const Dashboard = () => {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch("http://localhost:8080/api/auth/logout", {
+      const response = await fetch("http://localhost:8081/api/auth/logout", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,

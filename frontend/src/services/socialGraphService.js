@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:8080/api/v2/social';
+const API_URL = 'http://localhost:8081/api/v2/social';
 
 export const followUser = async (followingId) => {
     try {

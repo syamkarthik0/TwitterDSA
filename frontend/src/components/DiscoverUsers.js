@@ -15,7 +15,7 @@ const DiscoverUsers = () => {
                 throw new Error('No authentication token found');
             }
 
-            const response = await fetch('http://localhost:8080/api/users', {
+            const response = await fetch('http://localhost:8081/api/users', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
