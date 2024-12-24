@@ -16,8 +16,7 @@ Logout should ALWAYS succeed from the user's perspective
 Clear client-side state (localStorage) first
 Then attempt to clear server-side state
 Always redirect to login page
-Don't make the user stuck if something goes wrong
-Try logging out now - it should work smoothly in all cases:
+
 
 Normal logout
 Expired token
