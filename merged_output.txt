@@ -1542,16 +1542,23 @@ export const unfollowUser = async (followingId) => {
             throw new Error('Please log in to unfollow users');
         }
 
-        const response = await fetch(`${API_URL}/${followingId}`, {
+        // Ensure followingId is a number
+        const followingIdNum = parseInt(followingId, 10);
+        if (isNaN(followingIdNum)) {
+            throw new Error('Invalid user ID');
+        }
+
+        const response = await fetch(`${API_URL}/${followingIdNum}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
             }
         });
 
         if (!response.ok) {
-            const error = await response.text();
-            throw new Error(error || 'Failed to unfollow user');
+            const errorData = await response.json().catch(() => null);
+            throw new Error(errorData?.error || 'Failed to unfollow user');
         }
     } catch (error) {
         console.error('Error unfollowing user:', error);
@@ -2313,11 +2320,22 @@ public class FollowController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Not authenticated"));
             }
 
+            if (followerId.equals(followingId)) {
+                logger.error("User cannot unfollow themselves");
+                return ResponseEntity.badRequest().body(Map.of("error", "You cannot unfollow yourself"));
+            }
+
             socialGraphService.unfollowUser(followerId, followingId);
             return ResponseEntity.ok(Map.of("message", "Successfully unfollowed user"));
-        } catch (Exception e) {
-            logger.error("Error in unfollowUser: {}", e.getMessage());
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid unfollow request: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            logger.error("Unfollow state error: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Unexpected error in unfollowUser: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("error", "An unexpected error occurred"));
         }
     }
 
@@ -2530,15 +2548,50 @@ import java.util.stream.Collectors;
 @Component
 @Scope("singleton")
 public class SocialGraph {
-    // Adjacency list representation using ConcurrentHashMap for thread safety
-    private final Map<Long, Set<Long>> followers;
-    private final Map<Long, Set<Long>> following;
+    private final DirectedGraph followGraph;
     private final Map<Long, User> users;
 
     public SocialGraph() {
-        this.followers = new ConcurrentHashMap<>();
-        this.following = new ConcurrentHashMap<>();
+        this.followGraph = new DirectedGraph();
         this.users = new ConcurrentHashMap<>();
+    }
+
+    // Inner class representing a thread-safe directed graph
+    private static class DirectedGraph {
+        private final Map<Long, Set<Long>> followers;
+        private final Map<Long, Set<Long>> following;
+
+        public DirectedGraph() {
+            this.followers = new ConcurrentHashMap<>();
+            this.following = new ConcurrentHashMap<>();
+        }
+
+        public synchronized void addNode(Long nodeId) {
+            followers.putIfAbsent(nodeId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+            following.putIfAbsent(nodeId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+        }
+
+        public synchronized void addEdge(Long fromNode, Long toNode) {
+            following.get(fromNode).add(toNode);
+            followers.get(toNode).add(fromNode);
+        }
+
+        public synchronized void removeEdge(Long fromNode, Long toNode) {
+            following.get(fromNode).remove(toNode);
+            followers.get(toNode).remove(fromNode);
+        }
+
+        public Set<Long> getFollowers(Long nodeId) {
+            return new HashSet<>(followers.getOrDefault(nodeId, Collections.emptySet()));
+        }
+
+        public Set<Long> getFollowing(Long nodeId) {
+            return new HashSet<>(following.getOrDefault(nodeId, Collections.emptySet()));
+        }
+
+        public boolean hasEdge(Long fromNode, Long toNode) {
+            return following.containsKey(fromNode) && following.get(fromNode).contains(toNode);
+        }
     }
 
     // Add a user to the graph
@@ -2549,8 +2602,7 @@ public class SocialGraph {
 
         Long userId = user.getId();
         users.putIfAbsent(userId, user);
-        followers.putIfAbsent(userId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
-        following.putIfAbsent(userId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+        followGraph.addNode(userId);
     }
 
     // Add a following relationship (edge)
@@ -2562,10 +2614,7 @@ public class SocialGraph {
             throw new IllegalArgumentException("Following user not found in graph");
         }
 
-        // Add to following set of follower
-        following.get(followerId).add(followingId);
-        // Add to followers set of following
-        followers.get(followingId).add(followerId);
+        followGraph.addEdge(followerId, followingId);
     }
 
     // Remove a following relationship (edge)
@@ -2577,10 +2626,7 @@ public class SocialGraph {
             throw new IllegalArgumentException("Following user not found in graph");
         }
 
-        // Remove from following set of follower
-        following.get(followerId).remove(followingId);
-        // Remove from followers set of following
-        followers.get(followingId).remove(followerId);
+        followGraph.removeEdge(followerId, followingId);
     }
 
     // Get all followers of a user
@@ -2589,7 +2635,7 @@ public class SocialGraph {
             throw new IllegalArgumentException("User not found in graph");
         }
 
-        return followers.get(userId).stream()
+        return followGraph.getFollowers(userId).stream()
             .map(users::get)
             .collect(Collectors.toSet());
     }
@@ -2600,7 +2646,7 @@ public class SocialGraph {
             throw new IllegalArgumentException("User not found in graph");
         }
 
-        return following.get(userId).stream()
+        return followGraph.getFollowing(userId).stream()
             .map(users::get)
             .collect(Collectors.toSet());
     }
@@ -2610,7 +2656,7 @@ public class SocialGraph {
         if (!users.containsKey(followerId) || !users.containsKey(followingId)) {
             return false;
         }
-        return following.get(followerId).contains(followingId);
+        return followGraph.hasEdge(followerId, followingId);
     }
 
     // Get suggested users (friends of friends)
@@ -2620,11 +2666,11 @@ public class SocialGraph {
         }
 
         Set<Long> suggestedIds = new HashSet<>();
-        Set<Long> alreadyFollowing = following.get(userId);
+        Set<Long> alreadyFollowing = followGraph.getFollowing(userId);
 
         // Add friends of friends
-        for (Long followingId : following.get(userId)) {
-            suggestedIds.addAll(following.get(followingId));
+        for (Long followingId : alreadyFollowing) {
+            suggestedIds.addAll(followGraph.getFollowing(followingId));
         }
 
         // Remove the user themselves and users they already follow
@@ -2638,6 +2684,18 @@ public class SocialGraph {
             .limit(maxSuggestions)
             .map(users::get)
             .collect(Collectors.toSet());
+    }
+
+    // Get users for generating a feed (user + following)
+    public Set<User> getFeedUsers(Long userId) {
+        if (!users.containsKey(userId)) {
+            throw new IllegalArgumentException("User not found in graph");
+        }
+
+        Set<User> feedUsers = new HashSet<>();
+        feedUsers.add(users.get(userId)); // Add the user themselves
+        feedUsers.addAll(getFollowing(userId)); // Add all users they follow
+        return feedUsers;
     }
 }
 
@@ -2892,13 +2950,18 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface UserFeedRepository extends JpaRepository<UserFeed, Long> {
     Page<UserFeed> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
     
     @Modifying
-    @Query(value = "DELETE FROM user_feeds WHERE user_id = :followerId AND tweet_id IN (SELECT id FROM tweets WHERE user_id = :unfollowedUserId)", nativeQuery = true)
+    @Query("DELETE FROM UserFeed uf WHERE uf.user.id = :followerId AND uf.tweet.user.id = :unfollowedUserId")
     int deleteByUserAndTweetUser(@Param("followerId") Long followerId, @Param("unfollowedUserId") Long unfollowedUserId);
+
+    // Add a method to find feed entries to delete
+    List<UserFeed> findByUserIdAndTweetUserId(Long userId, Long tweetUserId);
 }
 
 
@@ -3390,16 +3453,24 @@ public class FeedService {
         logger.info("Added tweet {} to author's feed", tweet.getId());
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = Exception.class)
     public void removeUserTweetsFromFeed(Long followerId, Long unfollowedUserId) {
         logger.info("Removing tweets from follower {} feed for user {}", followerId, unfollowedUserId);
         
         try {
-            int deletedCount = userFeedRepository.deleteByUserAndTweetUser(followerId, unfollowedUserId);
-            logger.info("Removed {} tweets from feed", deletedCount);
+            // First find the feed entries to delete
+            List<UserFeed> feedEntries = userFeedRepository.findByUserIdAndTweetUserId(followerId, unfollowedUserId);
+            logger.info("Found {} feed entries to remove", feedEntries.size());
+            
+            // Delete them one by one to avoid complex joins
+            for (UserFeed entry : feedEntries) {
+                userFeedRepository.delete(entry);
+            }
+            
+            logger.info("Successfully removed {} tweets from feed", feedEntries.size());
         } catch (Exception e) {
-            logger.error("Feed cleanup failed: {}", e.getMessage());
-            throw e;
+            // Log error but don't rethrow - feed cleanup failure shouldn't prevent unfollow
+            logger.error("Feed cleanup failed: {}. This is non-critical and unfollow will proceed.", e.getMessage());
         }
     }
 
@@ -3565,26 +3636,29 @@ public class SocialGraphService {
         // Check if not following
         if (!socialGraph.isFollowing(followerId, followingId)) {
             logger.warn("Not following user - Follower: {}, Target: {}", followerId, followingId);
-            return; // Not following, no need to do anything
+            throw new IllegalStateException("Not following this user");
         }
+
+        // Remove from graph
+        socialGraph.removeFollowing(followerId, followingId);
+
+        // Update database relationships
+        follower.getFollowing().remove(following);
+        following.getFollowers().remove(follower);
+        
+        // Save both users to persist the relationship changes
+        userRepository.save(follower);
+        userRepository.save(following);
 
         try {
-            // Remove from graph
-            socialGraph.removeFollowing(followerId, followingId);
-
-            // Update database relationships
-            follower.getFollowing().remove(following);
-            following.getFollowers().remove(follower);
-            userRepository.save(follower);
-
-            // Clean up the feed
+            // Clean up the feed in a separate transaction
             feedService.removeUserTweetsFromFeed(followerId, followingId);
-            
-            logger.info("Successfully unfollowed user - Follower: {}, Unfollowed: {}", followerId, followingId);
         } catch (Exception e) {
-            logger.error("Error during unfollow process: {}", e.getMessage());
-            throw new RuntimeException("Failed to unfollow user", e);
+            // Log but continue - feed cleanup failure shouldn't prevent unfollow
+            logger.warn("Feed cleanup failed but unfollow succeeded: {}", e.getMessage());
         }
+        
+        logger.info("Successfully unfollowed user - Follower: {}, Unfollowed: {}", followerId, followingId);
     }
 
     private void validateUsers(Long followerId, Long followingId) {
