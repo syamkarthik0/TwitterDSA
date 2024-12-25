@@ -2539,163 +2539,301 @@ public class UserController {
 package com.auth.graph;
 
 import com.auth.model.User;
+import com.auth.graph.core.*;
 import org.springframework.stereotype.Component;
 import org.springframework.context.annotation.Scope;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Component
 @Scope("singleton")
 public class SocialGraph {
-    private final DirectedGraph followGraph;
-    private final Map<Long, User> users;
+    private final DirectedGraph<User> socialGraph;
 
     public SocialGraph() {
-        this.followGraph = new DirectedGraph();
-        this.users = new ConcurrentHashMap<>();
+        this.socialGraph = new DirectedGraph<>();
     }
 
-    // Inner class representing a thread-safe directed graph
-    private static class DirectedGraph {
-        private final Map<Long, Set<Long>> followers;
-        private final Map<Long, Set<Long>> following;
-
-        public DirectedGraph() {
-            this.followers = new ConcurrentHashMap<>();
-            this.following = new ConcurrentHashMap<>();
-        }
-
-        public synchronized void addNode(Long nodeId) {
-            followers.putIfAbsent(nodeId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
-            following.putIfAbsent(nodeId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
-        }
-
-        public synchronized void addEdge(Long fromNode, Long toNode) {
-            following.get(fromNode).add(toNode);
-            followers.get(toNode).add(fromNode);
-        }
-
-        public synchronized void removeEdge(Long fromNode, Long toNode) {
-            following.get(fromNode).remove(toNode);
-            followers.get(toNode).remove(fromNode);
-        }
-
-        public Set<Long> getFollowers(Long nodeId) {
-            return new HashSet<>(followers.getOrDefault(nodeId, Collections.emptySet()));
-        }
-
-        public Set<Long> getFollowing(Long nodeId) {
-            return new HashSet<>(following.getOrDefault(nodeId, Collections.emptySet()));
-        }
-
-        public boolean hasEdge(Long fromNode, Long toNode) {
-            return following.containsKey(fromNode) && following.get(fromNode).contains(toNode);
-        }
-    }
-
-    // Add a user to the graph
+    /**
+     * Adds a user to the social graph.
+     */
     public synchronized void addUser(User user) {
         if (user == null || user.getId() == null) {
             throw new IllegalArgumentException("User or user ID cannot be null");
         }
-
-        Long userId = user.getId();
-        users.putIfAbsent(userId, user);
-        followGraph.addNode(userId);
+        socialGraph.addNode(new Node<>(user.getId(), user));
     }
 
-    // Add a following relationship (edge)
+    /**
+     * Creates a following relationship from follower to following user.
+     */
     public synchronized void addFollowing(Long followerId, Long followingId) {
-        if (!users.containsKey(followerId)) {
+        if (!socialGraph.getNode(followerId).isPresent()) {
             throw new IllegalArgumentException("Follower not found in graph");
         }
-        if (!users.containsKey(followingId)) {
+        if (!socialGraph.getNode(followingId).isPresent()) {
             throw new IllegalArgumentException("Following user not found in graph");
         }
-
-        followGraph.addEdge(followerId, followingId);
+        socialGraph.addEdge(followerId, followingId);
     }
 
-    // Remove a following relationship (edge)
+    /**
+     * Removes a following relationship from follower to following user.
+     */
     public synchronized void removeFollowing(Long followerId, Long followingId) {
-        if (!users.containsKey(followerId)) {
+        if (!socialGraph.getNode(followerId).isPresent()) {
             throw new IllegalArgumentException("Follower not found in graph");
         }
-        if (!users.containsKey(followingId)) {
+        if (!socialGraph.getNode(followingId).isPresent()) {
             throw new IllegalArgumentException("Following user not found in graph");
         }
-
-        followGraph.removeEdge(followerId, followingId);
+        socialGraph.removeEdge(followerId, followingId);
     }
 
-    // Get all followers of a user
+    /**
+     * Gets all followers of a user.
+     */
     public Set<User> getFollowers(Long userId) {
-        if (!users.containsKey(userId)) {
-            throw new IllegalArgumentException("User not found in graph");
-        }
-
-        return followGraph.getFollowers(userId).stream()
-            .map(users::get)
+        return socialGraph.getIncomingNodes(userId).stream()
+            .map(Node::getData)
             .collect(Collectors.toSet());
     }
 
-    // Get all users that a user is following
+    /**
+     * Gets all users that a user is following.
+     */
     public Set<User> getFollowing(Long userId) {
-        if (!users.containsKey(userId)) {
-            throw new IllegalArgumentException("User not found in graph");
-        }
-
-        return followGraph.getFollowing(userId).stream()
-            .map(users::get)
+        return socialGraph.getOutgoingNodes(userId).stream()
+            .map(Node::getData)
             .collect(Collectors.toSet());
     }
 
-    // Check if one user follows another
+    /**
+     * Checks if one user follows another.
+     */
     public boolean isFollowing(Long followerId, Long followingId) {
-        if (!users.containsKey(followerId) || !users.containsKey(followingId)) {
-            return false;
-        }
-        return followGraph.hasEdge(followerId, followingId);
+        return socialGraph.hasEdge(followerId, followingId);
     }
 
-    // Get suggested users (friends of friends)
+    /**
+     * Gets suggested users based on friends of friends.
+     */
     public Set<User> getSuggestedUsers(Long userId, int maxSuggestions) {
-        if (!users.containsKey(userId)) {
-            throw new IllegalArgumentException("User not found in graph");
-        }
-
-        Set<Long> suggestedIds = new HashSet<>();
-        Set<Long> alreadyFollowing = followGraph.getFollowing(userId);
-
-        // Add friends of friends
-        for (Long followingId : alreadyFollowing) {
-            suggestedIds.addAll(followGraph.getFollowing(followingId));
-        }
-
-        // Remove the user themselves and users they already follow
-        suggestedIds.remove(userId);
-        suggestedIds.removeAll(alreadyFollowing);
-
-        // Convert to list, shuffle, and take top N
-        List<Long> shuffledIds = new ArrayList<>(suggestedIds);
-        Collections.shuffle(shuffledIds);
-        return shuffledIds.stream()
+        return socialGraph.getTwoHopNodes(userId).stream()
+            .map(Node::getData)
             .limit(maxSuggestions)
-            .map(users::get)
             .collect(Collectors.toSet());
     }
 
-    // Get users for generating a feed (user + following)
-    public Set<User> getFeedUsers(Long userId) {
-        if (!users.containsKey(userId)) {
-            throw new IllegalArgumentException("User not found in graph");
-        }
+    /**
+     * Gets mutual connections between two users.
+     */
+    public Set<User> getMutualConnections(Long user1Id, Long user2Id) {
+        return socialGraph.getMutualConnections(user1Id, user2Id).stream()
+            .map(Node::getData)
+            .collect(Collectors.toSet());
+    }
+}
 
-        Set<User> feedUsers = new HashSet<>();
-        feedUsers.add(users.get(userId)); // Add the user themselves
-        feedUsers.addAll(getFollowing(userId)); // Add all users they follow
-        return feedUsers;
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\graph\core\DirectedGraph.java ---
+package com.auth.graph.core;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+/**
+ * A thread-safe implementation of a directed graph using adjacency lists.
+ * @param <T> The type of data stored in the graph's nodes
+ */
+public class DirectedGraph<T> {
+    private final Map<Long, Node<T>> nodes;
+    private final Map<Long, Set<Long>> outgoingEdges; // source -> [targets]
+    private final Map<Long, Set<Long>> incomingEdges; // target -> [sources]
+
+    public DirectedGraph() {
+        this.nodes = new ConcurrentHashMap<>();
+        this.outgoingEdges = new ConcurrentHashMap<>();
+        this.incomingEdges = new ConcurrentHashMap<>();
+    }
+
+    /**
+     * Adds a node to the graph.
+     */
+    public synchronized void addNode(Node<T> node) {
+        nodes.put(node.getId(), node);
+        outgoingEdges.putIfAbsent(node.getId(), ConcurrentHashMap.newKeySet());
+        incomingEdges.putIfAbsent(node.getId(), ConcurrentHashMap.newKeySet());
+    }
+
+    /**
+     * Adds a directed edge from source to target.
+     */
+    public synchronized void addEdge(long sourceId, long targetId) {
+        if (!nodes.containsKey(sourceId) || !nodes.containsKey(targetId)) {
+            throw new IllegalArgumentException("Both nodes must exist in the graph");
+        }
+        outgoingEdges.get(sourceId).add(targetId);
+        incomingEdges.get(targetId).add(sourceId);
+    }
+
+    /**
+     * Removes a directed edge from source to target.
+     */
+    public synchronized void removeEdge(long sourceId, long targetId) {
+        if (!nodes.containsKey(sourceId) || !nodes.containsKey(targetId)) {
+            throw new IllegalArgumentException("Both nodes must exist in the graph");
+        }
+        outgoingEdges.get(sourceId).remove(targetId);
+        incomingEdges.get(targetId).remove(sourceId);
+    }
+
+    /**
+     * Gets all nodes that have edges pointing to them from the source node.
+     */
+    public Set<Node<T>> getOutgoingNodes(long sourceId) {
+        return outgoingEdges.getOrDefault(sourceId, Collections.emptySet())
+                .stream()
+                .map(nodes::get)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Gets all nodes that have edges pointing to the target node.
+     */
+    public Set<Node<T>> getIncomingNodes(long targetId) {
+        return incomingEdges.getOrDefault(targetId, Collections.emptySet())
+                .stream()
+                .map(nodes::get)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Checks if there is a directed edge from source to target.
+     */
+    public boolean hasEdge(long sourceId, long targetId) {
+        return outgoingEdges.containsKey(sourceId) && 
+               outgoingEdges.get(sourceId).contains(targetId);
+    }
+
+    /**
+     * Gets node by ID.
+     */
+    public Optional<Node<T>> getNode(long id) {
+        return Optional.ofNullable(nodes.get(id));
+    }
+
+    /**
+     * Gets all nodes that are two hops away from the source node.
+     * Useful for friend-of-friend recommendations.
+     */
+    public Set<Node<T>> getTwoHopNodes(long sourceId) {
+        Set<Node<T>> result = new HashSet<>();
+        Set<Long> firstHop = outgoingEdges.getOrDefault(sourceId, Collections.emptySet());
+        
+        for (Long friendId : firstHop) {
+            result.addAll(getOutgoingNodes(friendId));
+        }
+        
+        // Remove the original node and its direct connections
+        result.removeIf(node -> node.getId() == sourceId || firstHop.contains(node.getId()));
+        return result;
+    }
+
+    /**
+     * Gets mutual connections between two nodes.
+     */
+    public Set<Node<T>> getMutualConnections(long node1Id, long node2Id) {
+        Set<Long> connections1 = outgoingEdges.getOrDefault(node1Id, Collections.emptySet());
+        Set<Long> connections2 = outgoingEdges.getOrDefault(node2Id, Collections.emptySet());
+        
+        Set<Long> mutual = new HashSet<>(connections1);
+        mutual.retainAll(connections2);
+        
+        return mutual.stream()
+                .map(nodes::get)
+                .collect(Collectors.toSet());
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\graph\core\Edge.java ---
+package com.auth.graph.core;
+
+import java.util.Objects;
+
+/**
+ * Represents a directed edge in the graph between two nodes.
+ */
+public class Edge<T> {
+    private final Node<T> source;
+    private final Node<T> target;
+
+    public Edge(Node<T> source, Node<T> target) {
+        this.source = source;
+        this.target = target;
+    }
+
+    public Node<T> getSource() {
+        return source;
+    }
+
+    public Node<T> getTarget() {
+        return target;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Edge<?> edge = (Edge<?>) o;
+        return Objects.equals(source, edge.source) && Objects.equals(target, edge.target);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(source, target);
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\graph\core\Node.java ---
+package com.auth.graph.core;
+
+import java.util.Objects;
+
+/**
+ * Represents a node in the graph with a generic type for the node's data.
+ */
+public class Node<T> {
+    private final T data;
+    private final long id;
+
+    public Node(long id, T data) {
+        this.id = id;
+        this.data = data;
+    }
+
+    public T getData() {
+        return data;
+    }
+
+    public long getId() {
+        return id;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Node<?> node = (Node<?>) o;
+        return id == node.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 }
 

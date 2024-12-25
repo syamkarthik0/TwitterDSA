@@ -8,17 +8,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/social")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = "*")
 public class SocialGraphController {
     private static final Logger logger = LoggerFactory.getLogger(SocialGraphController.class);
     
+    private final SocialGraphService socialGraphService;
+
     @Autowired
-    private SocialGraphService socialGraphService;
+    public SocialGraphController(SocialGraphService socialGraphService) {
+        this.socialGraphService = socialGraphService;
+    }
 
     @PostMapping("/follow/{followingId}")
     public ResponseEntity<?> followUser(
@@ -47,28 +50,62 @@ public class SocialGraphController {
         }
     }
 
-    @GetMapping("/followers")
-    public ResponseEntity<Set<User>> getFollowers(
-            @RequestAttribute("userId") Long userId) {
-        return ResponseEntity.ok(socialGraphService.getFollowers(userId));
+    @GetMapping("/followers/{userId}")
+    public ResponseEntity<List<User>> getFollowers(@PathVariable Long userId) {
+        try {
+            List<User> followers = socialGraphService.getFollowersList(userId);
+            return ResponseEntity.ok(followers);
+        } catch (IllegalArgumentException e) {
+            logger.error("Error getting followers: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
     }
 
-    @GetMapping("/following")
-    public ResponseEntity<Set<User>> getFollowing(
-            @RequestAttribute("userId") Long userId) {
-        return ResponseEntity.ok(socialGraphService.getFollowing(userId));
+    @GetMapping("/following/{userId}")
+    public ResponseEntity<List<User>> getFollowing(@PathVariable Long userId) {
+        try {
+            List<User> following = socialGraphService.getFollowingList(userId);
+            return ResponseEntity.ok(following);
+        } catch (IllegalArgumentException e) {
+            logger.error("Error getting following: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
     }
 
-    @GetMapping("/suggestions")
+    @GetMapping("/suggestions/{userId}")
     public ResponseEntity<Set<User>> getSuggestedUsers(
-            @RequestAttribute("userId") Long userId,
+            @PathVariable Long userId,
             @RequestParam(defaultValue = "5") int maxSuggestions) {
-        return ResponseEntity.ok(socialGraphService.getSuggestedUsers(userId, maxSuggestions));
+        try {
+            Set<User> suggestions = socialGraphService.getSuggestedUsers(userId, maxSuggestions);
+            return ResponseEntity.ok(suggestions);
+        } catch (IllegalArgumentException e) {
+            logger.error("Error getting suggestions: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
     }
 
-    @GetMapping("/feed-users")
-    public ResponseEntity<List<Long>> getFeedUsers(
-            @RequestAttribute("userId") Long userId) {
-        return ResponseEntity.ok(socialGraphService.getFeedUsers(userId));
+    @GetMapping("/feed-users/{userId}")
+    public ResponseEntity<Set<User>> getFeedUsers(@PathVariable Long userId) {
+        try {
+            Set<User> feedUsers = socialGraphService.getFeedUsers(userId);
+            return ResponseEntity.ok(feedUsers);
+        } catch (IllegalArgumentException e) {
+            logger.error("Error getting feed users: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/mutual/{user1Id}/{user2Id}")
+    public ResponseEntity<Set<User>> getMutualConnections(
+            @PathVariable Long user1Id,
+            @PathVariable Long user2Id) {
+        try {
+            Set<User> mutualConnections = socialGraphService.getMutualConnections(user1Id, user2Id);
+            return ResponseEntity.ok(mutualConnections);
+        } catch (IllegalArgumentException e) {
+            logger.error("Error getting mutual connections: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

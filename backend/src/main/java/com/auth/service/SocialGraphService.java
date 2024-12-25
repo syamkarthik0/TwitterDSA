@@ -1,11 +1,9 @@
 package com.auth.service;
 
-import com.auth.graph.SocialGraph;
+import com.auth.graph.Graph;
 import com.auth.model.User;
-import com.auth.model.Tweet;
 import com.auth.repository.UserRepository;
 import com.auth.service.FeedService;
-import com.auth.service.UserRelationshipService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,18 +18,17 @@ import java.util.stream.Collectors;
 public class SocialGraphService {
     private static final Logger logger = LoggerFactory.getLogger(SocialGraphService.class);
     
-    private final SocialGraph socialGraph;
+    private final Graph followingGraph;  // Tracks who each user follows
+    private final Graph followersGraph;  // Tracks who follows each user
     private final UserRepository userRepository;
     private final FeedService feedService;
-    private final UserRelationshipService userRelationshipService;
 
     @Autowired
-    public SocialGraphService(SocialGraph socialGraph, UserRepository userRepository, 
-                            FeedService feedService, UserRelationshipService userRelationshipService) {
-        this.socialGraph = socialGraph;
+    public SocialGraphService(UserRepository userRepository, FeedService feedService) {
+        this.followingGraph = new Graph();
+        this.followersGraph = new Graph();
         this.userRepository = userRepository;
         this.feedService = feedService;
-        this.userRelationshipService = userRelationshipService;
         initializeGraph();
     }
 
@@ -45,14 +42,15 @@ public class SocialGraphService {
             
             // Add all users to graph
             for (User user : users) {
-                socialGraph.addUser(user);
+                followingGraph.addNode(user.getId());
+                followersGraph.addNode(user.getId());
             }
 
             // Add all following relationships
             for (User user : users) {
-                List<User> following = userRelationshipService.getFollowing(user.getId());
-                for (User followedUser : following) {
-                    socialGraph.addFollowing(user.getId(), followedUser.getId());
+                for (User following : user.getFollowing()) {
+                    followingGraph.addEdge(user.getId(), following.getId());
+                    followersGraph.addEdge(following.getId(), user.getId());
                 }
             }
             logger.info("Successfully initialized social graph with {} users", users.size());
@@ -75,20 +73,17 @@ public class SocialGraphService {
             .orElseThrow(() -> new IllegalArgumentException("Following user not found"));
 
         // Check if already following
-        if (socialGraph.isFollowing(followerId, followingId)) {
+        if (followingGraph.hasEdge(followerId, followingId)) {
             return; // Already following, no need to do anything
         }
 
-        // Add to graph first
-        socialGraph.addUser(follower);
-        socialGraph.addUser(following);
-        socialGraph.addFollowing(followerId, followingId);
+        // Update both graphs
+        followingGraph.addEdge(followerId, followingId);
+        followersGraph.addEdge(followingId, followerId);
 
-        // Update database
+        // Update database relationships
         follower.getFollowing().add(following);
         following.getFollowers().add(follower);
-        
-        // Save only the follower since the relationship is managed from the follower side
         userRepository.save(follower);
     }
 
@@ -108,19 +103,18 @@ public class SocialGraphService {
             .orElseThrow(() -> new IllegalArgumentException("Following user not found"));
 
         // Check if not following
-        if (!socialGraph.isFollowing(followerId, followingId)) {
+        if (!followingGraph.hasEdge(followerId, followingId)) {
             logger.warn("Not following user - Follower: {}, Target: {}", followerId, followingId);
             throw new IllegalStateException("Not following this user");
         }
 
-        // Remove from graph
-        socialGraph.removeFollowing(followerId, followingId);
+        // Update both graphs
+        followingGraph.removeEdge(followerId, followingId);
+        followersGraph.removeEdge(followingId, followerId);
 
         // Update database relationships
         follower.getFollowing().remove(following);
         following.getFollowers().remove(follower);
-        
-        // Save both users to persist the relationship changes
         userRepository.save(follower);
         userRepository.save(following);
 
@@ -135,80 +129,65 @@ public class SocialGraphService {
         logger.info("Successfully unfollowed user - Follower: {}, Unfollowed: {}", followerId, followingId);
     }
 
-    private void validateUsers(Long followerId, Long followingId) {
-        User follower = userRepository.findById(followerId)
-            .orElseThrow(() -> new IllegalArgumentException("Follower not found"));
-        User following = userRepository.findById(followingId)
-            .orElseThrow(() -> new IllegalArgumentException("Following user not found"));
-
-        // Check if not following
-        if (!socialGraph.isFollowing(followerId, followingId)) {
-            return; // Not following, no need to do anything
-        }
-
-        // Update database
-        follower.getFollowing().remove(following);
-        following.getFollowers().remove(follower);
-        
-        // Save both users to persist the relationship changes
-        userRepository.save(follower);
-        userRepository.save(following);
-    }
-
     // Get user's followers
     public Set<User> getFollowers(Long userId) {
-        User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        socialGraph.addUser(user); // Ensure user exists in graph
-        return socialGraph.getFollowers(userId);
+        Set<Long> followerIds = followersGraph.getNeighbors(userId);
+        return followerIds.stream()
+            .map(id -> userRepository.findById(id).orElse(null))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
     }
 
     // Get users that a user is following
     public Set<User> getFollowing(Long userId) {
-        User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        socialGraph.addUser(user); // Ensure user exists in graph
-        return socialGraph.getFollowing(userId);
+        Set<Long> followingIds = followingGraph.getNeighbors(userId);
+        return followingIds.stream()
+            .map(id -> userRepository.findById(id).orElse(null))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
     }
 
     // Get user's followers as a list
     public List<User> getFollowersList(Long userId) {
-        return userRelationshipService.getFollowers(userId);
+        return new ArrayList<>(getFollowers(userId));
     }
 
     // Get users that a user is following as a list
     public List<User> getFollowingList(Long userId) {
-        return userRelationshipService.getFollowing(userId);
+        return new ArrayList<>(getFollowing(userId));
     }
 
     // Check if one user follows another
     public boolean isFollowing(Long followerId, Long followingId) {
-        User follower = userRepository.findById(followerId)
-            .orElseThrow(() -> new IllegalArgumentException("Follower not found"));
-        User following = userRepository.findById(followingId)
-            .orElseThrow(() -> new IllegalArgumentException("Following user not found"));
-        socialGraph.addUser(follower); // Ensure user exists in graph
-        socialGraph.addUser(following); // Ensure user exists in graph
-        return socialGraph.isFollowing(followerId, followingId);
+        return followingGraph.hasEdge(followerId, followingId);
     }
 
     // Get suggested users to follow
     public Set<User> getSuggestedUsers(Long userId, int maxSuggestions) {
-        User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        socialGraph.addUser(user); // Ensure user exists in graph
-        return socialGraph.getSuggestedUsers(userId, maxSuggestions);
+        Set<Long> suggestedIds = followingGraph.getTwoHopNodes(userId);
+        
+        // Convert IDs to Users and limit the number of suggestions
+        return suggestedIds.stream()
+            .map(id -> userRepository.findById(id).orElse(null))
+            .filter(Objects::nonNull)
+            .limit(maxSuggestions)
+            .collect(Collectors.toSet());
     }
 
-    // Get users for feed generation
-    public List<Long> getFeedUsers(Long userId) {
-        User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        socialGraph.addUser(user); // Ensure user exists in graph
-        List<Long> feedUsers = new ArrayList<>(socialGraph.getFollowing(userId).stream()
-            .map(User::getId)
-            .collect(Collectors.toList()));
-        feedUsers.add(userId); // Add the user's own tweets to the feed
+    // Get mutual connections between users
+    public Set<User> getMutualConnections(Long user1Id, Long user2Id) {
+        Set<Long> mutualIds = followingGraph.getMutualConnections(user1Id, user2Id);
+        
+        return mutualIds.stream()
+            .map(id -> userRepository.findById(id).orElse(null))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+    }
+
+    // Get users for feed generation (user + following)
+    public Set<User> getFeedUsers(Long userId) {
+        Set<User> feedUsers = new HashSet<>(getFollowing(userId));
+        userRepository.findById(userId).ifPresent(feedUsers::add);
         return feedUsers;
     }
 }
