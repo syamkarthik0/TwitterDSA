@@ -57,11 +57,22 @@ public class FollowController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Not authenticated"));
             }
 
+            if (followerId.equals(followingId)) {
+                logger.error("User cannot unfollow themselves");
+                return ResponseEntity.badRequest().body(Map.of("error", "You cannot unfollow yourself"));
+            }
+
             socialGraphService.unfollowUser(followerId, followingId);
             return ResponseEntity.ok(Map.of("message", "Successfully unfollowed user"));
-        } catch (Exception e) {
-            logger.error("Error in unfollowUser: {}", e.getMessage());
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid unfollow request: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            logger.error("Unfollow state error: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Unexpected error in unfollowUser: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("error", "An unexpected error occurred"));
         }
     }
 

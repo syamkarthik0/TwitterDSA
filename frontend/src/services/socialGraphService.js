@@ -31,16 +31,23 @@ export const unfollowUser = async (followingId) => {
             throw new Error('Please log in to unfollow users');
         }
 
-        const response = await fetch(`${API_URL}/${followingId}`, {
+        // Ensure followingId is a number
+        const followingIdNum = parseInt(followingId, 10);
+        if (isNaN(followingIdNum)) {
+            throw new Error('Invalid user ID');
+        }
+
+        const response = await fetch(`${API_URL}/${followingIdNum}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
             }
         });
 
         if (!response.ok) {
-            const error = await response.text();
-            throw new Error(error || 'Failed to unfollow user');
+            const errorData = await response.json().catch(() => null);
+            throw new Error(errorData?.error || 'Failed to unfollow user');
         }
     } catch (error) {
         console.error('Error unfollowing user:', error);
@@ -80,7 +87,13 @@ export const getFollowing = async (userId) => {
             throw new Error('Please log in to view following');
         }
 
-        const response = await fetch(`${API_URL}/following/${userId || 'me'}`, {
+        // If userId is 'me', use the stored userId from localStorage
+        const currentUserId = userId === 'me' ? localStorage.getItem('userId') : userId;
+        if (!currentUserId) {
+            throw new Error('User ID not found. Please log in again.');
+        }
+
+        const response = await fetch(`${API_URL}/following/${currentUserId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -95,6 +108,22 @@ export const getFollowing = async (userId) => {
     } catch (error) {
         console.error('Error getting following:', error);
         throw error;
+    }
+};
+
+// Helper function to get current user ID from token
+const getCurrentUserId = () => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    
+    try {
+        // JWT tokens are in format: header.payload.signature
+        const payload = token.split('.')[1];
+        const decodedPayload = JSON.parse(atob(payload));
+        return decodedPayload.userId; // Assuming the user ID is stored in the token
+    } catch (error) {
+        console.error('Error decoding token:', error);
+        return null;
     }
 };
 

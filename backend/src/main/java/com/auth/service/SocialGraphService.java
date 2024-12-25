@@ -110,26 +110,29 @@ public class SocialGraphService {
         // Check if not following
         if (!socialGraph.isFollowing(followerId, followingId)) {
             logger.warn("Not following user - Follower: {}, Target: {}", followerId, followingId);
-            return; // Not following, no need to do anything
+            throw new IllegalStateException("Not following this user");
         }
+
+        // Remove from graph
+        socialGraph.removeFollowing(followerId, followingId);
+
+        // Update database relationships
+        follower.getFollowing().remove(following);
+        following.getFollowers().remove(follower);
+        
+        // Save both users to persist the relationship changes
+        userRepository.save(follower);
+        userRepository.save(following);
 
         try {
-            // Remove from graph
-            socialGraph.removeFollowing(followerId, followingId);
-
-            // Update database relationships
-            follower.getFollowing().remove(following);
-            following.getFollowers().remove(follower);
-            userRepository.save(follower);
-
-            // Clean up the feed
+            // Clean up the feed in a separate transaction
             feedService.removeUserTweetsFromFeed(followerId, followingId);
-            
-            logger.info("Successfully unfollowed user - Follower: {}, Unfollowed: {}", followerId, followingId);
         } catch (Exception e) {
-            logger.error("Error during unfollow process: {}", e.getMessage());
-            throw new RuntimeException("Failed to unfollow user", e);
+            // Log but continue - feed cleanup failure shouldn't prevent unfollow
+            logger.warn("Feed cleanup failed but unfollow succeeded: {}", e.getMessage());
         }
+        
+        logger.info("Successfully unfollowed user - Follower: {}, Unfollowed: {}", followerId, followingId);
     }
 
     private void validateUsers(Long followerId, Long followingId) {

@@ -60,16 +60,24 @@ public class FeedService {
         logger.info("Added tweet {} to author's feed", tweet.getId());
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = Exception.class)
     public void removeUserTweetsFromFeed(Long followerId, Long unfollowedUserId) {
         logger.info("Removing tweets from follower {} feed for user {}", followerId, unfollowedUserId);
         
         try {
-            int deletedCount = userFeedRepository.deleteByUserAndTweetUser(followerId, unfollowedUserId);
-            logger.info("Removed {} tweets from feed", deletedCount);
+            // First find the feed entries to delete
+            List<UserFeed> feedEntries = userFeedRepository.findByUserIdAndTweetUserId(followerId, unfollowedUserId);
+            logger.info("Found {} feed entries to remove", feedEntries.size());
+            
+            // Delete them one by one to avoid complex joins
+            for (UserFeed entry : feedEntries) {
+                userFeedRepository.delete(entry);
+            }
+            
+            logger.info("Successfully removed {} tweets from feed", feedEntries.size());
         } catch (Exception e) {
-            logger.error("Feed cleanup failed: {}", e.getMessage());
-            throw e;
+            // Log error but don't rethrow - feed cleanup failure shouldn't prevent unfollow
+            logger.error("Feed cleanup failed: {}. This is non-critical and unfollow will proceed.", e.getMessage());
         }
     }
 

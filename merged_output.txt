@@ -1,0 +1,3880 @@
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\App.js ---
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  Navigate,
+} from "react-router-dom";
+import Login from "./Login";
+import Register from "./Register";
+import CacheMonitor from "./components/CacheMonitor";
+import Feed from "./components/Feed";
+import UserProfile from "./components/UserProfile";
+import DiscoverUsers from "./components/DiscoverUsers";
+import "./App.css";
+
+// Dashboard component with new Feed
+const Dashboard = () => {
+  const [username, setUsername] = React.useState("");
+
+  const handleLogout = async () => {
+    const token = localStorage.getItem("token");
+    
+    // Always clear local storage first
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+
+    try {
+      if (token) {
+        await fetch("http://localhost:8081/api/auth/logout", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      // Always redirect to login
+      window.location.href = "/login";
+    }
+  };
+
+  React.useEffect(() => {
+    const storedUsername = localStorage.getItem("username");
+    if (storedUsername) {
+      setUsername(storedUsername);
+    }
+  }, []);
+
+  return (
+    <div style={styles.dashboard}>
+      <div style={styles.header}>
+        <h1>Welcome, {username}!</h1>
+        <button onClick={handleLogout} style={styles.logoutButton}>
+          Logout
+        </button>
+      </div>
+      <div style={styles.content}>
+        <div style={styles.feed}>
+          <Feed />
+        </div>
+        <div style={styles.discover}>
+          <DiscoverUsers />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Protected Route component
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    return <Navigate to="/login" />;
+  }
+  return children;
+};
+
+const App = () => {
+  return (
+    <Router>
+      <div style={styles.container}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile/:username"
+            element={
+              <ProtectedRoute>
+                <UserProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cache"
+            element={
+              <ProtectedRoute>
+                <CacheMonitor />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </div>
+    </Router>
+  );
+};
+
+const styles = {
+  container: {
+    minHeight: "100vh",
+    backgroundColor: "#f5f5f5",
+  },
+  dashboard: {
+    padding: "20px",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "20px",
+  },
+  content: {
+    display: "flex",
+    gap: "20px",
+    flexDirection: "row",
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "0 20px"
+  },
+  feed: {
+    flex: "2"
+  },
+  discover: {
+    flex: "1",
+    minWidth: "300px"
+  },
+  logoutButton: {
+    padding: "10px 20px",
+    backgroundColor: "#1DA1F2",
+    color: "white",
+    border: "none",
+    borderRadius: "20px",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+};
+
+export default App;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\App.test.js ---
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders learn react link', () => {
+  render(<App />);
+  const linkElement = screen.getByText(/learn react/i);
+  expect(linkElement).toBeInTheDocument();
+});
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\index.js ---
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\Login.js ---
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const Login = () => {
+  const [formData, setFormData] = useState({ username: "", password: "" });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setError("");
+  };
+
+  const validateEmail = (email) =>
+    /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateEmail(formData.username)) {
+      setError("Invalid email format");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("http://localhost:8081/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      // Store token and user info in localStorage
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("username", data.username);
+      localStorage.setItem("userId", data.userId);
+
+      // Redirect to home page
+      navigate("/");
+    } catch (err) {
+      setError(err.message || "An error occurred during login");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={styles.container}>
+      <form onSubmit={handleSubmit} style={styles.form}>
+        <h2 style={styles.title}>Login</h2>
+        <input
+          type="text"
+          name="username"
+          placeholder="Email"
+          value={formData.username}
+          onChange={handleChange}
+          style={styles.input}
+          disabled={loading}
+          autoComplete="email"
+        />
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          value={formData.password}
+          onChange={handleChange}
+          style={styles.input}
+          disabled={loading}
+          autoComplete="current-password"
+        />
+        <button type="submit" style={styles.button} disabled={loading}>
+          {loading ? "Logging in..." : "Login"}
+        </button>
+        {error && <p style={styles.error}>{error}</p>}
+        <button
+          type="button"
+          onClick={() => navigate("/register")}
+          style={styles.linkButton}
+        >
+          Don't have an account? Register
+        </button>
+      </form>
+    </div>
+  );
+};
+
+const styles = {
+  container: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    minHeight: "100vh",
+    backgroundColor: "#f5f5f5",
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "15px",
+    padding: "30px",
+    backgroundColor: "white",
+    borderRadius: "8px",
+    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+    width: "100%",
+    maxWidth: "400px",
+  },
+  title: {
+    textAlign: "center",
+    margin: "0 0 20px 0",
+    color: "#333",
+  },
+  input: {
+    padding: "12px",
+    border: "1px solid #ddd",
+    borderRadius: "4px",
+    fontSize: "16px",
+  },
+  button: {
+    padding: "12px",
+    backgroundColor: "#007bff",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    fontSize: "16px",
+    cursor: "pointer",
+    ":hover": {
+      backgroundColor: "#0056b3",
+    },
+    ":disabled": {
+      backgroundColor: "#cccccc",
+      cursor: "not-allowed",
+    },
+  },
+  error: {
+    color: "red",
+    textAlign: "center",
+    margin: "10px 0 0 0",
+  },
+  linkButton: {
+    background: "none",
+    border: "none",
+    color: "#007bff",
+    cursor: "pointer",
+    textDecoration: "underline",
+    fontSize: "14px",
+  },
+};
+
+export default Login;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\Register.js ---
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const Register = () => {
+  const [formData, setFormData] = useState({ username: "", password: "" });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setError("");
+  };
+
+  const validateEmail = (email) =>
+    /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateEmail(formData.username)) {
+      setError("Invalid email format");
+      return;
+    }
+
+    if (!formData.password || formData.password.trim() === "") {
+      setError("Password cannot be empty");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("http://localhost:8081/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: formData.username.trim(),
+          password: formData.password.trim()
+        }),
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Registration failed");
+      }
+
+      // Redirect to login after successful registration
+      navigate("/login");
+    } catch (err) {
+      setError(err.message || "An error occurred during registration");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={styles.container}>
+      <form onSubmit={handleSubmit} style={styles.form}>
+        <h2 style={styles.title}>Register</h2>
+        <input
+          type="text"
+          name="username"
+          placeholder="Email"
+          value={formData.username}
+          onChange={handleChange}
+          style={styles.input}
+          disabled={loading}
+          autoComplete="email"
+        />
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          value={formData.password}
+          onChange={handleChange}
+          style={styles.input}
+          disabled={loading}
+          autoComplete="new-password"
+        />
+        <button type="submit" style={styles.button} disabled={loading}>
+          {loading ? "Registering..." : "Register"}
+        </button>
+        {error && <p style={styles.error}>{error}</p>}
+        <button
+          type="button"
+          onClick={() => navigate("/login")}
+          style={styles.linkButton}
+        >
+          Already have an account? Login
+        </button>
+      </form>
+    </div>
+  );
+};
+
+const styles = {
+  container: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    minHeight: "100vh",
+    backgroundColor: "#f5f5f5",
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "15px",
+    padding: "30px",
+    backgroundColor: "white",
+    borderRadius: "8px",
+    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+    width: "100%",
+    maxWidth: "400px",
+  },
+  title: {
+    textAlign: "center",
+    margin: "0 0 20px 0",
+    color: "#333",
+  },
+  input: {
+    padding: "12px",
+    border: "1px solid #ddd",
+    borderRadius: "4px",
+    fontSize: "16px",
+  },
+  button: {
+    padding: "12px",
+    backgroundColor: "#007bff",
+    color: "white",
+    border: "none",
+    borderRadius: "4px",
+    fontSize: "16px",
+    cursor: "pointer",
+    ":hover": {
+      backgroundColor: "#0056b3",
+    },
+    ":disabled": {
+      backgroundColor: "#cccccc",
+      cursor: "not-allowed",
+    },
+  },
+  error: {
+    color: "red",
+    textAlign: "center",
+    margin: "10px 0 0 0",
+  },
+  linkButton: {
+    background: "none",
+    border: "none",
+    color: "#007bff",
+    cursor: "pointer",
+    textDecoration: "underline",
+    fontSize: "14px",
+  },
+};
+
+export default Register;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\reportWebVitals.js ---
+const reportWebVitals = onPerfEntry => {
+  if (onPerfEntry && onPerfEntry instanceof Function) {
+    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+      getCLS(onPerfEntry);
+      getFID(onPerfEntry);
+      getFCP(onPerfEntry);
+      getLCP(onPerfEntry);
+      getTTFB(onPerfEntry);
+    });
+  }
+};
+
+export default reportWebVitals;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\setupTests.js ---
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom';
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\BinarySearchVisualizer.js ---
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\CacheMonitor.js ---
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+
+const CacheMonitor = () => {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('No authentication token found');
+          return;
+        }
+        const response = await axios.get('http://localhost:8081/api/cache/stats', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        setStats(response.data);
+      } catch (error) {
+        console.error('Error fetching cache stats:', error);
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!stats) return <div>Loading cache statistics...</div>;
+
+  return (
+    <Box sx={{ margin: 2 }}>
+      <Paper sx={{ padding: 2 }}>
+        <Typography variant="h5" gutterBottom>
+          Cache Monitor
+        </Typography>
+        
+        <Box sx={{ marginTop: 2 }}>
+          <Typography variant="h6">Cache Statistics</Typography>
+          <Typography>
+            Size: {stats.size} / {stats.maxSize}
+          </Typography>
+          <Typography>
+            Hit Rate: {(stats.hitRate * 100).toFixed(1)}%
+          </Typography>
+          <Typography>
+            Hits: {stats.cacheHits} | Misses: {stats.cacheMisses}
+          </Typography>
+        </Box>
+
+        <Box sx={{ marginTop: 2 }}>
+          <Typography variant="h6">Most Accessed Users</Typography>
+          {stats.mostAccessedUsers.map((user) => (
+            <Typography key={user.username}>
+              {user.username}: {user.hits} hits (Last access: {new Date(user.lastAccessed).toLocaleTimeString()})
+            </Typography>
+          ))}
+        </Box>
+      </Paper>
+    </Box>
+  );
+};
+
+export default CacheMonitor;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\CreateTweet.js ---
+import React, { useState } from 'react';
+import axios from 'axios';
+import { Box, TextField, Button, Paper, Typography } from '@mui/material';
+
+const CreateTweet = ({ onTweetCreated }) => {
+  const [content, setContent] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!content.trim()) {
+      setError('Tweet cannot be empty');
+      return;
+    }
+    if (content.length > 280) {
+      setError('Tweet cannot exceed 280 characters');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please log in to create a tweet');
+        return;
+      }
+
+      const response = await axios.post('http://localhost:8081/api/tweets', 
+        { content },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      setContent('');
+      setError('');
+      if (onTweetCreated) {
+        onTweetCreated(response.data);
+      }
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to create tweet');
+    }
+  };
+
+  return (
+    <Box sx={{ margin: 2 }}>
+      <Paper sx={{ padding: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Create Tweet
+        </Typography>
+        <form onSubmit={handleSubmit}>
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="What's happening?"
+            error={!!error}
+            helperText={error}
+            sx={{ marginBottom: 2 }}
+          />
+          <Button 
+            type="submit" 
+            variant="contained" 
+            color="primary"
+            disabled={!content.trim()}
+          >
+            Tweet
+          </Button>
+        </form>
+      </Paper>
+    </Box>
+  );
+};
+
+export default CreateTweet;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\DiscoverUsers.js ---
+import React, { useState, useEffect } from 'react';
+import { Box, Paper, Typography, List, ListItem, ListItemText, ListItemSecondaryAction, CircularProgress } from '@mui/material';
+import FollowButton from './FollowButton';
+
+const DiscoverUsers = () => {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const currentUsername = localStorage.getItem('username');
+
+    const fetchUsers = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('No authentication token found');
+            }
+
+            const response = await fetch('http://localhost:8081/api/users', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch users');
+            }
+
+            const data = await response.json();
+            // Filter out the current user
+            setUsers(data.filter(user => user.username !== currentUsername));
+            setError('');
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            setError('Failed to load users. Please try again later.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, [currentUsername]);
+
+    const handleFollowChange = () => {
+        // Refresh the user list after follow/unfollow
+        fetchUsers();
+    };
+
+    if (loading) {
+        return (
+            <Box sx={{ margin: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (error) {
+        return (
+            <Box sx={{ margin: 2 }}>
+                <Paper sx={{ padding: 2 }}>
+                    <Typography color="error" align="center">
+                        {error}
+                    </Typography>
+                </Paper>
+            </Box>
+        );
+    }
+
+    return (
+        <Box sx={{ margin: 2 }}>
+            <Paper sx={{ padding: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                    Discover Users
+                </Typography>
+                <List>
+                    {users.length === 0 ? (
+                        <Typography color="textSecondary" align="center" sx={{ py: 2 }}>
+                            No users found to follow
+                        </Typography>
+                    ) : (
+                        users.map(user => (
+                            <ListItem key={user.id} divider>
+                                <ListItemText 
+                                    primary={user.username}
+                                />
+                                <ListItemSecondaryAction>
+                                    <FollowButton 
+                                        userId={user.id} 
+                                        onFollowChange={handleFollowChange}
+                                    />
+                                </ListItemSecondaryAction>
+                            </ListItem>
+                        ))
+                    )}
+                </List>
+            </Paper>
+        </Box>
+    );
+};
+
+export default DiscoverUsers;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\Feed.js ---
+import React, { useState, useEffect } from 'react';
+import { Box, Paper, Typography, CircularProgress } from '@mui/material';
+import Tweet from './Tweet';
+import TweetForm from './TweetForm';
+import { getFeed } from '../services/tweetService';
+import { useLocation } from 'react-router-dom';
+
+const Feed = () => {
+    const [tweets, setTweets] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [refreshKey, setRefreshKey] = useState(0); // Add refresh key for forcing updates
+    const currentUsername = localStorage.getItem('username');
+    const REFRESH_INTERVAL = 10000; // Refresh every 10 seconds
+    const location = useLocation();
+
+    useEffect(() => {
+        // Initial load
+        loadTweets();
+
+        // Set up auto-refresh interval
+        const intervalId = setInterval(loadTweets, REFRESH_INTERVAL);
+
+        // Cleanup interval on component unmount
+        return () => clearInterval(intervalId);
+    }, [location.key, refreshKey]); // Add refreshKey to dependencies
+
+    const loadTweets = async () => {
+        try {
+            setLoading(true);
+            const response = await getFeed();
+            const feedTweets = response.content || [];
+            
+            // Filter out tweets from unfollowed users (additional safety check)
+            setTweets(feedTweets);
+            setError(null);
+        } catch (err) {
+            console.error('Error loading tweets:', err);
+            setError('Failed to load tweets. Please try again later.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Callback for when follow/unfollow action occurs
+    const handleFollowChange = async () => {
+        // Force an immediate refresh by incrementing the refresh key
+        setRefreshKey(prev => prev + 1);
+        // Clear current tweets to prevent showing stale data
+        setTweets([]);
+        // Load fresh tweets
+        await loadTweets();
+    };
+
+    const handleNewTweet = (newTweet) => {
+        setTweets(prevTweets => [newTweet, ...prevTweets]);
+    };
+
+    if (loading && tweets.length === 0) {
+        return (
+            <Box sx={{ margin: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (error) {
+        return (
+            <Paper elevation={3} sx={{ marginBottom: 2, padding: 2, backgroundColor: '#ffebee' }}>
+                <Typography color="error">{error}</Typography>
+            </Paper>
+        );
+    }
+
+    return (
+        <Box sx={{ maxWidth: 600, margin: '0 auto', padding: 2 }}>
+            <Paper elevation={3} sx={{ marginBottom: 2, padding: 2 }}>
+                <TweetForm onTweetCreated={handleNewTweet} />
+            </Paper>
+
+            {tweets.length === 0 ? (
+                <Paper elevation={3} sx={{ padding: 2, textAlign: 'center' }}>
+                    <Typography variant="body1">No tweets in your feed yet. Follow some users to see their tweets!</Typography>
+                </Paper>
+            ) : (
+                <Box>
+                    {loading && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', padding: 1 }}>
+                            <CircularProgress size={20} />
+                        </Box>
+                    )}
+                    {tweets.map(tweet => (
+                        <Box key={tweet.id} sx={{ marginBottom: 2 }}>
+                            <Tweet 
+                                tweet={tweet} 
+                                username={currentUsername} 
+                                onFollowChange={handleFollowChange}
+                            />
+                        </Box>
+                    ))}
+                </Box>
+            )}
+        </Box>
+    );
+};
+
+export default Feed;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\FollowButton.js ---
+import React, { useState, useEffect } from 'react';
+import { Button } from '@mui/material';
+import { followUser, unfollowUser, getFollowing } from '../services/socialGraphService';
+
+const FollowButton = ({ userId, onFollowChange }) => {
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        // Check if the current user is following this user
+        const checkFollowStatus = async () => {
+            try {
+                const following = await getFollowing('me');
+                setIsFollowing(following.some(user => user.id === userId));
+            } catch (error) {
+                console.error('Error checking follow status:', error);
+            }
+        };
+        checkFollowStatus();
+    }, [userId]);
+
+    const handleFollowClick = async () => {
+        setLoading(true);
+        try {
+            if (isFollowing) {
+                await unfollowUser(userId);
+            } else {
+                await followUser(userId);
+            }
+            setIsFollowing(!isFollowing);
+            if (onFollowChange) {
+                onFollowChange();
+            }
+        } catch (error) {
+            console.error('Error updating follow status:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (!userId) {
+        return null;
+    }
+
+    return (
+        <Button
+            variant={isFollowing ? "outlined" : "contained"}
+            color="primary"
+            onClick={handleFollowClick}
+            disabled={loading}
+        >
+            {loading ? 'Loading...' : (isFollowing ? 'Unfollow' : 'Follow')}
+        </Button>
+    );
+};
+
+export default FollowButton;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\Tweet.js ---
+import React from 'react';
+import { Card, CardContent, Typography, Box, Avatar } from '@mui/material';
+import { formatDistanceToNow } from 'date-fns';
+import FollowButton from './FollowButton';
+
+const Tweet = ({ tweet, username: currentUsername, onFollowChange }) => {
+    // Add null checks
+    if (!tweet || !tweet.user) {
+        return null;
+    }
+
+    const { user, content, timestamp } = tweet;
+    const isOwnTweet = user.username === currentUsername;
+
+    // Format the timestamp
+    const getTimeAgo = () => {
+        try {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            if (isNaN(date.getTime())) return ''; // Invalid date
+            return formatDistanceToNow(date, { addSuffix: true });
+        } catch (error) {
+            console.error('Error formatting timestamp:', error);
+            return '';
+        }
+    };
+
+    return (
+        <Card elevation={2}>
+            <CardContent>
+                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                    <Box display="flex" alignItems="center">
+                        <Avatar sx={{ marginRight: 1 }}>
+                            {user.username.charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Typography variant="subtitle1" component="span" fontWeight="bold">
+                            {user.username}
+                        </Typography>
+                    </Box>
+                    {!isOwnTweet && (
+                        <FollowButton 
+                            userId={user.id} 
+                            onFollowChange={onFollowChange}
+                        />
+                    )}
+                </Box>
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {content}
+                </Typography>
+                <Typography variant="caption" color="textSecondary">
+                    {getTimeAgo()}
+                </Typography>
+            </CardContent>
+        </Card>
+    );
+};
+
+export default Tweet;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\TweetForm.js ---
+import React, { useState } from 'react';
+import { TextField, Button, Box, Typography, CircularProgress } from '@mui/material';
+import { createTweet } from '../services/tweetService';
+
+const TweetForm = ({ onTweetCreated }) => {
+    const [content, setContent] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!content.trim()) {
+            setError('Tweet cannot be empty');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError('');
+            
+            const newTweet = await createTweet(content.trim());
+            onTweetCreated(newTweet);
+            setContent('');
+        } catch (error) {
+            setError('Failed to create tweet. Please try again.');
+            console.error('Error creating tweet:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Box component="form" onSubmit={handleSubmit} sx={styles.form}>
+            <TextField
+                multiline
+                rows={3}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="What's happening?"
+                variant="outlined"
+                fullWidth
+                error={!!error}
+                helperText={error}
+                disabled={loading}
+                sx={styles.textarea}
+                inputProps={{
+                    maxLength: 280
+                }}
+            />
+            <Box sx={styles.footer}>
+                <Typography variant="caption" color={content.length > 260 ? 'error' : 'textSecondary'}>
+                    {content.length}/280
+                </Typography>
+                <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={loading || !content.trim() || content.length > 280}
+                    sx={styles.button}
+                >
+                    {loading ? <CircularProgress size={24} /> : 'Tweet'}
+                </Button>
+            </Box>
+        </Box>
+    );
+};
+
+const styles = {
+    form: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2
+    },
+    textarea: {
+        '& .MuiOutlinedInput-root': {
+            borderRadius: 2,
+            backgroundColor: 'background.paper'
+        }
+    },
+    footer: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 1
+    },
+    button: {
+        borderRadius: 20,
+        minWidth: 100
+    }
+};
+
+export default TweetForm;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\TweetList.js ---
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Box, Paper, Typography, List, ListItem, ListItemText } from '@mui/material';
+
+const TweetList = ({ tweets, setTweets }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchTweets = async () => {
+      try {
+        const response = await axios.get('http://localhost:8081/api/tweets', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        setTweets(response.data.content || []);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching tweets:', error);
+        setError(error.message);
+        setLoading(false);
+      }
+    };
+
+    fetchTweets();
+    const interval = setInterval(fetchTweets, 10000); // Refresh every 10 seconds
+    return () => clearInterval(interval);
+  }, [setTweets]);
+
+  if (loading) return <div>Loading tweets...</div>;
+  if (error) return <div>Error loading tweets: {error}</div>;
+  if (!tweets || tweets.length === 0) return <div>No tweets available. Create your first tweet!</div>;
+
+  return (
+    <Box sx={{ margin: 2 }}>
+      <Paper sx={{ padding: 2 }}>
+        <Typography variant="h5" gutterBottom>
+          Recent Tweets
+        </Typography>
+        <List>
+          {tweets.map((tweet, index) => (
+            <ListItem key={tweet.id || index} divider>
+              <ListItemText
+                primary={tweet.content}
+                secondary={`By ${tweet.user?.username || 'Unknown'} at ${tweet.timestamp ? new Date(tweet.timestamp).toLocaleString() : 'Unknown time'}`}
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Paper>
+    </Box>
+  );
+};
+
+export default TweetList;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\UserProfile.js ---
+import React, { useState, useEffect } from 'react';
+import { getFollowers, getFollowing } from '../services/followService';
+import FollowButton from './FollowButton';
+import { useParams } from 'react-router-dom';
+
+const UserProfile = () => {
+    const { username } = useParams();
+    const [followers, setFollowers] = useState([]);
+    const [following, setFollowing] = useState([]);
+    const [activeTab, setActiveTab] = useState('tweets');
+    const currentUsername = localStorage.getItem('username');
+    const isOwnProfile = username === currentUsername;
+
+    const fetchFollowData = async () => {
+        try {
+            const [followersData, followingData] = await Promise.all([
+                getFollowers(),
+                getFollowing()
+            ]);
+            setFollowers(followersData);
+            setFollowing(followingData);
+        } catch (error) {
+            console.error('Error fetching follow data:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchFollowData();
+    }, [username]);
+
+    const handleFollowChange = () => {
+        fetchFollowData();
+    };
+
+    return (
+        <div style={styles.container}>
+            <div style={styles.header}>
+                <h2>{username}</h2>
+                {!isOwnProfile && <FollowButton userId={username} onFollowChange={handleFollowChange} />}
+            </div>
+
+            <div style={styles.stats}>
+                <div style={styles.stat}>
+                    <span style={styles.statCount}>{followers.length}</span>
+                    <span style={styles.statLabel}>Followers</span>
+                </div>
+                <div style={styles.stat}>
+                    <span style={styles.statCount}>{following.length}</span>
+                    <span style={styles.statLabel}>Following</span>
+                </div>
+            </div>
+
+            <div style={styles.tabs}>
+                <button
+                    style={{...styles.tab, ...(activeTab === 'tweets' ? styles.activeTab : {})}}
+                    onClick={() => setActiveTab('tweets')}
+                >
+                    Tweets
+                </button>
+                <button
+                    style={{...styles.tab, ...(activeTab === 'followers' ? styles.activeTab : {})}}
+                    onClick={() => setActiveTab('followers')}
+                >
+                    Followers
+                </button>
+                <button
+                    style={{...styles.tab, ...(activeTab === 'following' ? styles.activeTab : {})}}
+                    onClick={() => setActiveTab('following')}
+                >
+                    Following
+                </button>
+            </div>
+
+            <div style={styles.content}>
+                {activeTab === 'followers' && (
+                    <div style={styles.userList}>
+                        {followers.map(follower => (
+                            <div key={follower.id} style={styles.userItem}>
+                                <span>{follower.username}</span>
+                                {!isOwnProfile && follower.username !== currentUsername && (
+                                    <FollowButton userId={follower.id} />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {activeTab === 'following' && (
+                    <div style={styles.userList}>
+                        {following.map(user => (
+                            <div key={user.id} style={styles.userItem}>
+                                <span>{user.username}</span>
+                                {!isOwnProfile && user.username !== currentUsername && (
+                                    <FollowButton userId={user.id} />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const styles = {
+    container: {
+        padding: '20px',
+        maxWidth: '600px',
+        margin: '0 auto'
+    },
+    header: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '20px'
+    },
+    stats: {
+        display: 'flex',
+        gap: '20px',
+        marginBottom: '20px'
+    },
+    stat: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center'
+    },
+    statCount: {
+        fontSize: '18px',
+        fontWeight: 'bold'
+    },
+    statLabel: {
+        color: '#536471',
+        fontSize: '14px'
+    },
+    tabs: {
+        display: 'flex',
+        borderBottom: '1px solid #eee',
+        marginBottom: '20px'
+    },
+    tab: {
+        flex: 1,
+        padding: '10px',
+        border: 'none',
+        background: 'none',
+        cursor: 'pointer',
+        fontSize: '16px',
+        color: '#536471'
+    },
+    activeTab: {
+        color: '#1DA1F2',
+        borderBottom: '2px solid #1DA1F2'
+    },
+    userList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px'
+    },
+    userItem: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '10px',
+        borderBottom: '1px solid #eee'
+    }
+};
+
+export default UserProfile;
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\components\UserSearch.js ---
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\services\followService.js ---
+const API_URL = 'http://localhost:8081/api';
+
+export const followUser = async (userId) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found');
+        }
+
+        if (!userId) {
+            console.warn('Missing user ID for follow:', { userId });
+            return false;
+        }
+
+        const response = await fetch(`${API_URL}/follow/${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to follow user');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error following user:', error);
+        // Return false instead of throwing error to handle the case gracefully
+        return false;
+    }
+};
+
+export const unfollowUser = async (userId) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found');
+        }
+
+        if (!userId) {
+            console.warn('Missing user ID for unfollow:', { userId });
+            return false;
+        }
+
+        const response = await fetch(`${API_URL}/follow/${userId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to unfollow user');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error unfollowing user:', error);
+        // Return false instead of throwing error to handle the case gracefully
+        return false;
+    }
+};
+
+export const getFollowers = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const userId = localStorage.getItem('userId');
+        if (!token || !userId) {
+            throw new Error('No authentication token or user ID found');
+        }
+
+        const response = await fetch(`${API_URL}/follow/followers/${userId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to get followers');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error getting followers:', error);
+        // Return false instead of throwing error to handle the case gracefully
+        return false;
+    }
+};
+
+export const getFollowing = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const userId = localStorage.getItem('userId');
+        if (!token || !userId) {
+            throw new Error('No authentication token or user ID found');
+        }
+
+        const response = await fetch(`${API_URL}/follow/following/${userId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to get following users');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error getting following users:', error);
+        // Return false instead of throwing error to handle the case gracefully
+        return false;
+    }
+};
+
+export const checkFollowing = async (currentUserId, targetUserId) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.warn('No authentication token found');
+            return undefined;
+        }
+
+        if (!currentUserId || !targetUserId) {
+            console.warn('Missing user IDs for follow check:', { currentUserId, targetUserId });
+            return undefined;
+        }
+
+        const response = await fetch(`${API_URL}/follow/check/${currentUserId}/${targetUserId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to check following status');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error checking following status:', error);
+        throw error;
+    }
+};
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\services\socialGraphService.js ---
+const API_URL = 'http://localhost:8081/api/follow';
+
+export const followUser = async (followingId) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to follow users');
+        }
+
+        const response = await fetch(`${API_URL}/${followingId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to follow user');
+        }
+    } catch (error) {
+        console.error('Error following user:', error);
+        throw error;
+    }
+};
+
+export const unfollowUser = async (followingId) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to unfollow users');
+        }
+
+        const response = await fetch(`${API_URL}/${followingId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to unfollow user');
+        }
+    } catch (error) {
+        console.error('Error unfollowing user:', error);
+        throw error;
+    }
+};
+
+export const getFollowers = async (userId) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to view followers');
+        }
+
+        const response = await fetch(`${API_URL}/followers/${userId || 'me'}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to get followers');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error getting followers:', error);
+        throw error;
+    }
+};
+
+export const getFollowing = async (userId) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to view following');
+        }
+
+        // If userId is 'me', use the stored userId from localStorage
+        const currentUserId = userId === 'me' ? localStorage.getItem('userId') : userId;
+        if (!currentUserId) {
+            throw new Error('User ID not found. Please log in again.');
+        }
+
+        const response = await fetch(`${API_URL}/following/${currentUserId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to get following');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error getting following:', error);
+        throw error;
+    }
+};
+
+// Helper function to get current user ID from token
+const getCurrentUserId = () => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    
+    try {
+        // JWT tokens are in format: header.payload.signature
+        const payload = token.split('.')[1];
+        const decodedPayload = JSON.parse(atob(payload));
+        return decodedPayload.userId; // Assuming the user ID is stored in the token
+    } catch (error) {
+        console.error('Error decoding token:', error);
+        return null;
+    }
+};
+
+export const getSuggestedUsers = async (maxSuggestions = 5) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to view suggestions');
+        }
+
+        const response = await fetch(`${API_URL}/suggestions?maxSuggestions=${maxSuggestions}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to fetch suggestions');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching suggestions:', error);
+        throw error;
+    }
+};
+
+export const getFeedUsers = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to view feed');
+        }
+
+        const response = await fetch(`${API_URL}/feed-users`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to fetch feed users');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching feed users:', error);
+        throw error;
+    }
+};
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/frontend/src\services\tweetService.js ---
+const API_URL = 'http://localhost:8081/api';
+
+export const createTweet = async (content) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to create a tweet');
+        }
+
+        const response = await fetch(`${API_URL}/tweets`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ content })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to create tweet');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error creating tweet:', error);
+        throw error;
+    }
+};
+
+export const getFeed = async (page = 0, size = 10) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to view your feed');
+        }
+
+        const response = await fetch(`${API_URL}/tweets/feed?page=${page}&size=${size}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error || 'Failed to fetch feed');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching feed:', error);
+        throw error;
+    }
+};
+
+export const getUserTweets = async (userId, page = 0, size = 10) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to view tweets');
+        }
+
+        // Get username from userId
+        const response = await fetch(`${API_URL}/users/${userId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch user information');
+        }
+
+        const user = await response.json();
+        const username = user.username;
+
+        // Get tweets by username
+        const tweetsResponse = await fetch(`${API_URL}/tweets/user/${username}?page=${page}&size=${size}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!tweetsResponse.ok) {
+            const error = await tweetsResponse.text();
+            throw new Error(error || 'Failed to fetch user tweets');
+        }
+
+        return await tweetsResponse.json();
+    } catch (error) {
+        console.error('Error fetching user tweets:', error);
+        throw error;
+    }
+};
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\AuthApplication.java ---
+package com.auth;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class AuthApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(AuthApplication.class, args);
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\PasswordHashVerifier.java ---
+package com.auth;
+
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
+public class PasswordHashVerifier {
+    public static void main(String[] args) {
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+        
+        // Test existing user
+        String storedHash = "$2a$10$xXG12g53IPX.K4/HN7OGjez9743qlhgbvSQNvt6Sc5dMiayzmrlbW";
+        String rawPassword = "test123";
+        
+        boolean matches = encoder.matches(rawPassword, storedHash);
+        System.out.println("Password 'test123' matches stored hash: " + matches);
+        
+        // Generate hash for new user
+        String shashankPassword = "shashank";
+        String shashankHash = encoder.encode(shashankPassword);
+        System.out.println("\nNew hash generated for 'shashank': " + shashankHash);
+        System.out.println("Verifying new hash matches password: " + encoder.matches(shashankPassword, shashankHash));
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\cache\CacheService.java ---
+package com.auth.cache;
+
+import com.auth.model.User;
+import com.auth.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import java.util.Comparator;
+import java.util.Optional;
+
+@Service
+public class CacheService {
+
+    private static final Logger logger = LoggerFactory.getLogger(CacheService.class);
+    private static final int MAX_CACHE_SIZE = 10000; // Maximum cache size
+    private TreeNode root; // Root of the binary search tree
+    private int size = 0;
+    private Map<String, Long> lastAccessTime = new HashMap<>();
+    private Map<String, Integer> cacheHits = new HashMap<>();
+    private long totalRequests = 0;
+    private long cacheHitCount = 0;
+    private long cacheMissCount = 0;
+
+    @Autowired
+    private UserRepository userRepository; // Inject UserRepository for database interaction
+
+    // Check if the cache is empty
+    public boolean isCacheEmpty() {
+        logger.info("Checking if cache is empty...");
+        return root == null;
+    }
+
+    // Add a user to the cache
+    public void addUserToCache(User user) {
+        logger.info("Adding user to cache: {}", user.getUsername());
+        if (size >= MAX_CACHE_SIZE) {
+            evictLeastRecentlyUsed();
+        }
+        root = insertRec(root, user);
+        lastAccessTime.put(user.getUsername(), System.currentTimeMillis());
+        size++;
+    }
+
+    // Recursive method to insert a user into the BST
+    private TreeNode insertRec(TreeNode root, User user) {
+        if (root == null) {
+            logger.debug("Inserting user at a new tree node: {}", user.getUsername());
+            return new TreeNode(user);
+        }
+
+        String username = user.getUsername();
+        if (username.compareTo(root.getUser().getUsername()) < 0) {
+            root.setLeft(insertRec(root.getLeft(), user));
+        } else {
+            root.setRight(insertRec(root.getRight(), user));
+        }
+
+        return root;
+    }
+
+    // Fetch a user by username
+    public User getUserByUsername(String username) {
+        logger.info("Fetching user for username: {}", username);
+        totalRequests++;
+        
+        TreeNode node = searchNodeForUsername(root, username);
+        if (node == null) {
+            logger.warn("Cache MISS for username: {}", username);
+            cacheMissCount++;
+            return null;
+        }
+
+        logger.info("Cache HIT for username: {}", username);
+        cacheHitCount++;
+        cacheHits.merge(username, 1, Integer::sum);
+        lastAccessTime.put(username, System.currentTimeMillis());
+        return node.getUser();
+    }
+
+    // Fetch all users
+    public List<User> getAllUsersFromCache() {
+        logger.info("Fetching all users from cache...");
+        List<User> users = new ArrayList<>();
+        traverseTree(root, users);
+        return users;
+    }
+
+    // Search for a node by username
+    private TreeNode searchNodeForUsername(TreeNode root, String username) {
+        if (root == null) {
+            return null;
+        }
+
+        String currentUsername = root.getUser().getUsername();
+        if (currentUsername.equals(username)) {
+            return root;
+        }
+
+        if (username.compareTo(currentUsername) < 0) {
+            return searchNodeForUsername(root.getLeft(), username);
+        }
+
+        return searchNodeForUsername(root.getRight(), username);
+    }
+
+    // Traverse the tree and collect users
+    private void traverseTree(TreeNode node, List<User> users) {
+        if (node != null) {
+            traverseTree(node.getLeft(), users);
+            users.add(node.getUser());
+            traverseTree(node.getRight(), users);
+        }
+    }
+
+    // Evict the least recently used user from the cache
+    private void evictLeastRecentlyUsed() {
+        String lruUser = lastAccessTime.entrySet()
+            .stream()
+            .min(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey)
+            .orElse(null);
+        
+        if (lruUser != null) {
+            logger.info("Evicting least recently used user: {}", lruUser);
+            removeFromCache(lruUser);
+            lastAccessTime.remove(lruUser);
+            size--;
+        }
+    }
+
+    // Remove a user from the cache
+    private void removeFromCache(String username) {
+        root = removeRec(root, username);
+    }
+
+    // Recursive method to remove a user from the BST
+    private TreeNode removeRec(TreeNode root, String username) {
+        if (root == null) {
+            return null;
+        }
+
+        int comparison = username.compareTo(root.getUser().getUsername());
+        if (comparison < 0) {
+            root.setLeft(removeRec(root.getLeft(), username));
+        } else if (comparison > 0) {
+            root.setRight(removeRec(root.getRight(), username));
+        } else {
+            // Node to delete found
+            if (root.getLeft() == null) {
+                return root.getRight();
+            } else if (root.getRight() == null) {
+                return root.getLeft();
+            }
+            
+            // Node with two children
+            TreeNode successor = findMin(root.getRight());
+            root.setUser(successor.getUser());
+            root.setRight(removeRec(root.getRight(), successor.getUser().getUsername()));
+        }
+        return root;
+    }
+
+    // Find the node with the minimum value in the tree
+    private TreeNode findMin(TreeNode node) {
+        while (node.getLeft() != null) {
+            node = node.getLeft();
+        }
+        return node;
+    }
+
+    // Get cache statistics
+    public Map<String, Object> getCacheStats() {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("size", size);
+        stats.put("maxSize", MAX_CACHE_SIZE);
+        stats.put("totalRequests", totalRequests);
+        stats.put("cacheHits", cacheHitCount);
+        stats.put("cacheMisses", cacheMissCount);
+        stats.put("hitRate", totalRequests > 0 ? (double) cacheHitCount / totalRequests : 0);
+        stats.put("mostAccessedUsers", getMostAccessedUsers(5));
+        return stats;
+    }
+
+    private List<Map<String, Object>> getMostAccessedUsers(int limit) {
+        return cacheHits.entrySet().stream()
+            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+            .limit(limit)
+            .map(entry -> {
+                Map<String, Object> userStats = new HashMap<>();
+                userStats.put("username", entry.getKey());
+                userStats.put("hits", entry.getValue());
+                userStats.put("lastAccessed", lastAccessTime.get(entry.getKey()));
+                return userStats;
+            })
+            .collect(Collectors.toList());
+    }
+
+    // Scheduled method to refresh the cache
+    @Scheduled(fixedRate = 300000) // 5 minutes
+    public void refreshCache() {
+        logger.info("Starting incremental cache refresh...");
+        List<User> dbUsers = userRepository.findAll();
+        Set<String> dbUsernames = dbUsers.stream()
+            .map(User::getUsername)
+            .collect(Collectors.toSet());
+        
+        // Remove users that no longer exist in DB
+        List<String> cachedUsers = getAllUsersFromCache()
+            .stream()
+            .map(User::getUsername)
+            .collect(Collectors.toList());
+            
+        for (String username : cachedUsers) {
+            if (!dbUsernames.contains(username)) {
+                removeFromCache(username);
+                lastAccessTime.remove(username);
+                size--;
+                logger.info("Removed deleted user from cache: {}", username);
+            }
+        }
+        
+        // Update or add new users
+        for (User user : dbUsers) {
+            TreeNode node = searchNodeForUsername(root, user.getUsername());
+            if (node == null || !node.getUser().equals(user)) {
+                addUserToCache(user);
+                logger.info("Updated/Added user in cache: {}", user.getUsername());
+            }
+        }
+        logger.info("Incremental cache refresh completed. Current cache size: {}", size);
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\cache\TreeNode.java ---
+
+package com.auth.cache;
+
+import com.auth.model.User; // Assuming User is the model class you provided
+
+public class TreeNode {
+    private User user;     // Reference to the User object
+    private TreeNode left; // Left child in the BST
+    private TreeNode right; // Right child in the BST
+
+    // Constructor for TreeNode, takes a User object
+    public TreeNode(User user) {
+        this.user = user;
+        this.left = null;
+        this.right = null;
+    }
+
+    // Getter and setter for user, left, right
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public TreeNode getLeft() {
+        return left;
+    }
+
+    public void setLeft(TreeNode left) {
+        this.left = left;
+    }
+
+    public TreeNode getRight() {
+        return right;
+    }
+
+    public void setRight(TreeNode right) {
+        this.right = right;
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\config\JacksonConfig.java ---
+package com.auth.config;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.hibernate5.Hibernate5Module;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+
+@Configuration
+public class JacksonConfig {
+    @Bean
+    public MappingJackson2HttpMessageConverter mappingJackson2HttpMessageConverter() {
+        MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
+        ObjectMapper mapper = converter.getObjectMapper();
+        Hibernate5Module hibernate5Module = new Hibernate5Module();
+        hibernate5Module.configure(Hibernate5Module.Feature.FORCE_LAZY_LOADING, false);
+        mapper.registerModule(hibernate5Module);
+        return converter;
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\controller\AuthController.java ---
+package com.auth.controller;
+
+import com.auth.model.User;
+import com.auth.security.JwtUtil;
+import com.auth.service.AuthService;
+import com.auth.service.SessionManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+
+    @Autowired
+    private AuthService authService;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private SessionManager sessionManager;
+
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody User user) {
+        try {
+            authService.register(user);
+            return ResponseEntity.ok().body(Map.of("message", "User registered successfully"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
+        String username = credentials.get("username");
+        String password = credentials.get("password");
+        
+        logger.debug("Login attempt - Username: {}, Password length: {}", username, password != null ? password.length() : "null");
+        logger.debug("Raw credentials received: {}", credentials);
+
+        Optional<User> userOpt = authService.authenticate(username, password);
+        
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            UserDetails userDetails = org.springframework.security.core.userdetails.User
+                .withUsername(username)
+                .password("")
+                .authorities("USER")
+                .build();
+
+            String token = jwtUtil.generateToken(userDetails);
+            sessionManager.createSession(username, token);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", token);
+            response.put("username", username);
+            response.put("userId", user.getId());
+            return ResponseEntity.ok(response);
+        }
+
+        return ResponseEntity.badRequest().body(Map.of("error", "Invalid credentials"));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestHeader("Authorization") String token) {
+        try {
+            if (token != null && token.startsWith("Bearer ")) {
+                String jwt = token.substring(7);
+                String username = jwtUtil.extractUsername(jwt);
+                
+                // Even if token is expired, try to logout the user
+                if (username != null) {
+                    authService.logout(username);
+                    return ResponseEntity.ok().body(Map.of("message", "Logged out successfully"));
+                }
+            }
+            return ResponseEntity.ok().body(Map.of("message", "Logged out"));
+        } catch (Exception e) {
+            logger.error("Error during logout: {}", e.getMessage());
+            // Still return OK to ensure client proceeds with logout
+            return ResponseEntity.ok().body(Map.of("message", "Logged out"));
+        }
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\controller\CacheController.java ---
+package com.auth.controller;
+
+import com.auth.cache.CacheService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/cache")
+@CrossOrigin(origins = "http://localhost:3000")
+public class CacheController {
+
+    @Autowired
+    private CacheService cacheService;
+
+    @GetMapping("/stats")
+    public Map<String, Object> getCacheStats() {
+        return cacheService.getCacheStats();
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\controller\FollowController.java ---
+package com.auth.controller;
+
+import com.auth.model.User;
+import com.auth.service.SocialGraphService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.servlet.http.HttpServletRequest;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/follow")
+@CrossOrigin(origins = "http://localhost:3000")
+public class FollowController {
+    private static final Logger logger = LoggerFactory.getLogger(FollowController.class);
+
+    @Autowired
+    private SocialGraphService socialGraphService;
+
+    @PostMapping("/{followingId}")
+    public ResponseEntity<?> followUser(HttpServletRequest request, @PathVariable Long followingId) {
+        try {
+            Long followerId = (Long) request.getAttribute("userId");
+            logger.info("Follow request - Follower ID: {}, Following ID: {}", followerId, followingId);
+            
+            if (followerId == null) {
+                logger.error("Follower ID is missing in the request");
+                return ResponseEntity.badRequest().body(Map.of("error", "Not authenticated"));
+            }
+
+            socialGraphService.followUser(followerId, followingId);
+            return ResponseEntity.ok(Map.of("message", "Successfully followed user"));
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid follow request: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            logger.error("Follow state error: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Unexpected error in followUser: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("error", "An unexpected error occurred"));
+        }
+    }
+
+    @DeleteMapping("/{followingId}")
+    public ResponseEntity<?> unfollowUser(HttpServletRequest request, @PathVariable Long followingId) {
+        try {
+            Long followerId = (Long) request.getAttribute("userId");
+            logger.info("Unfollow request - Follower ID: {}, Following ID: {}", followerId, followingId);
+            
+            if (followerId == null) {
+                logger.error("Follower ID is missing in the request");
+                return ResponseEntity.badRequest().body(Map.of("error", "Not authenticated"));
+            }
+
+            socialGraphService.unfollowUser(followerId, followingId);
+            return ResponseEntity.ok(Map.of("message", "Successfully unfollowed user"));
+        } catch (Exception e) {
+            logger.error("Error in unfollowUser: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/followers/{userId}")
+    public ResponseEntity<List<User>> getFollowers(@PathVariable Long userId) {
+        try {
+            return ResponseEntity.ok(socialGraphService.getFollowersList(userId));
+        } catch (Exception e) {
+            logger.error("Error getting followers for user {}: {}", userId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/following/{userId}")
+    public ResponseEntity<List<User>> getFollowing(@PathVariable Long userId) {
+        try {
+            return ResponseEntity.ok(socialGraphService.getFollowingList(userId));
+        } catch (Exception e) {
+            logger.error("Error getting following for user {}: {}", userId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/check/{userId}/{followingId}")
+    public ResponseEntity<Boolean> isFollowing(@PathVariable Long userId, @PathVariable Long followingId) {
+        try {
+            return ResponseEntity.ok(socialGraphService.isFollowing(userId, followingId));
+        } catch (Exception e) {
+            logger.error("Error checking follow status for {} following {}: {}", userId, followingId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\controller\SocialGraphController.java ---
+package com.auth.controller;
+
+import com.auth.model.User;
+import com.auth.service.SocialGraphService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Set;
+
+@RestController
+@RequestMapping("/api/social")
+@CrossOrigin(origins = "http://localhost:3000")
+public class SocialGraphController {
+    private static final Logger logger = LoggerFactory.getLogger(SocialGraphController.class);
+    
+    @Autowired
+    private SocialGraphService socialGraphService;
+
+    @PostMapping("/follow/{followingId}")
+    public ResponseEntity<?> followUser(
+            @RequestAttribute("userId") Long followerId,
+            @PathVariable Long followingId) {
+        try {
+            socialGraphService.followUser(followerId, followingId);
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @PostMapping("/unfollow/{followingId}")
+    public ResponseEntity<?> unfollowUser(
+            @RequestAttribute("userId") Long followerId,
+            @PathVariable Long followingId) {
+        logger.info("⚡ Unfollow request - {} -> {}", followerId, followingId);
+        try {
+            socialGraphService.unfollowUser(followerId, followingId);
+            logger.info("✅ Unfollow successful");
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            logger.error("❌ Unfollow failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/followers")
+    public ResponseEntity<Set<User>> getFollowers(
+            @RequestAttribute("userId") Long userId) {
+        return ResponseEntity.ok(socialGraphService.getFollowers(userId));
+    }
+
+    @GetMapping("/following")
+    public ResponseEntity<Set<User>> getFollowing(
+            @RequestAttribute("userId") Long userId) {
+        return ResponseEntity.ok(socialGraphService.getFollowing(userId));
+    }
+
+    @GetMapping("/suggestions")
+    public ResponseEntity<Set<User>> getSuggestedUsers(
+            @RequestAttribute("userId") Long userId,
+            @RequestParam(defaultValue = "5") int maxSuggestions) {
+        return ResponseEntity.ok(socialGraphService.getSuggestedUsers(userId, maxSuggestions));
+    }
+
+    @GetMapping("/feed-users")
+    public ResponseEntity<List<Long>> getFeedUsers(
+            @RequestAttribute("userId") Long userId) {
+        return ResponseEntity.ok(socialGraphService.getFeedUsers(userId));
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\controller\TweetController.java ---
+package com.auth.controller;
+
+import com.auth.model.Tweet;
+import com.auth.service.TweetService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/tweets")
+@CrossOrigin(origins = "http://localhost:3000")
+public class TweetController {
+
+    @Autowired
+    private TweetService tweetService;
+
+    @PostMapping
+    public ResponseEntity<Tweet> createTweet(
+            @RequestAttribute("userId") Long userId,
+            @RequestBody Map<String, String> payload) {
+        String content = payload.get("content");
+        if (content == null || content.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        Tweet tweet = tweetService.createTweet(userId, content);
+        return ResponseEntity.ok(tweet);
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<Page<Tweet>> getUserTweets(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(tweetService.getUserTweets(userId, page, size));
+    }
+
+    @GetMapping("/feed")
+    public ResponseEntity<Page<Tweet>> getFeed(
+            @RequestAttribute("userId") Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(tweetService.getFeedForUser(userId, page, size));
+    }
+
+    @DeleteMapping("/{tweetId}")
+    public ResponseEntity<Void> deleteTweet(
+            @RequestAttribute("userId") Long userId,
+            @PathVariable Long tweetId) {
+        tweetService.deleteTweet(userId, tweetId);
+        return ResponseEntity.ok().build();
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\controller\UserController.java ---
+package com.auth.controller;
+
+import com.auth.model.User;
+import com.auth.service.AuthService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    @Autowired
+    private AuthService authService;
+
+    @GetMapping
+    public ResponseEntity<?> getAllUsers() {
+        return ResponseEntity.ok(authService.getAllUsers());
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\controller\UserSearchController.java ---
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\dsa\BinarySearch.java ---
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\graph\SocialGraph.java ---
+package com.auth.graph;
+
+import com.auth.model.User;
+import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Scope;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+@Component
+@Scope("singleton")
+public class SocialGraph {
+    // Adjacency list representation using ConcurrentHashMap for thread safety
+    private final Map<Long, Set<Long>> followers;
+    private final Map<Long, Set<Long>> following;
+    private final Map<Long, User> users;
+
+    public SocialGraph() {
+        this.followers = new ConcurrentHashMap<>();
+        this.following = new ConcurrentHashMap<>();
+        this.users = new ConcurrentHashMap<>();
+    }
+
+    // Add a user to the graph
+    public synchronized void addUser(User user) {
+        if (user == null || user.getId() == null) {
+            throw new IllegalArgumentException("User or user ID cannot be null");
+        }
+
+        Long userId = user.getId();
+        users.putIfAbsent(userId, user);
+        followers.putIfAbsent(userId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+        following.putIfAbsent(userId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+    }
+
+    // Add a following relationship (edge)
+    public synchronized void addFollowing(Long followerId, Long followingId) {
+        if (!users.containsKey(followerId)) {
+            throw new IllegalArgumentException("Follower not found in graph");
+        }
+        if (!users.containsKey(followingId)) {
+            throw new IllegalArgumentException("Following user not found in graph");
+        }
+
+        // Add to following set of follower
+        following.get(followerId).add(followingId);
+        // Add to followers set of following
+        followers.get(followingId).add(followerId);
+    }
+
+    // Remove a following relationship (edge)
+    public synchronized void removeFollowing(Long followerId, Long followingId) {
+        if (!users.containsKey(followerId)) {
+            throw new IllegalArgumentException("Follower not found in graph");
+        }
+        if (!users.containsKey(followingId)) {
+            throw new IllegalArgumentException("Following user not found in graph");
+        }
+
+        // Remove from following set of follower
+        following.get(followerId).remove(followingId);
+        // Remove from followers set of following
+        followers.get(followingId).remove(followerId);
+    }
+
+    // Get all followers of a user
+    public Set<User> getFollowers(Long userId) {
+        if (!users.containsKey(userId)) {
+            throw new IllegalArgumentException("User not found in graph");
+        }
+
+        return followers.get(userId).stream()
+            .map(users::get)
+            .collect(Collectors.toSet());
+    }
+
+    // Get all users that a user is following
+    public Set<User> getFollowing(Long userId) {
+        if (!users.containsKey(userId)) {
+            throw new IllegalArgumentException("User not found in graph");
+        }
+
+        return following.get(userId).stream()
+            .map(users::get)
+            .collect(Collectors.toSet());
+    }
+
+    // Check if one user follows another
+    public boolean isFollowing(Long followerId, Long followingId) {
+        if (!users.containsKey(followerId) || !users.containsKey(followingId)) {
+            return false;
+        }
+        return following.get(followerId).contains(followingId);
+    }
+
+    // Get suggested users (friends of friends)
+    public Set<User> getSuggestedUsers(Long userId, int maxSuggestions) {
+        if (!users.containsKey(userId)) {
+            throw new IllegalArgumentException("User not found in graph");
+        }
+
+        Set<Long> suggestedIds = new HashSet<>();
+        Set<Long> alreadyFollowing = following.get(userId);
+
+        // Add friends of friends
+        for (Long followingId : following.get(userId)) {
+            suggestedIds.addAll(following.get(followingId));
+        }
+
+        // Remove the user themselves and users they already follow
+        suggestedIds.remove(userId);
+        suggestedIds.removeAll(alreadyFollowing);
+
+        // Convert to list, shuffle, and take top N
+        List<Long> shuffledIds = new ArrayList<>(suggestedIds);
+        Collections.shuffle(shuffledIds);
+        return shuffledIds.stream()
+            .limit(maxSuggestions)
+            .map(users::get)
+            .collect(Collectors.toSet());
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\model\Follower.java ---
+package com.auth.model;
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import javax.persistence.*;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "followers")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class Follower {
+    @EmbeddedId
+    private FollowerId id;
+
+    @ManyToOne
+    @MapsId("followerId")
+    @JoinColumn(name = "follower_id")
+    private User follower;
+
+    @ManyToOne
+    @MapsId("followingId")
+    @JoinColumn(name = "following_id")
+    private User following;
+
+    @Column(name = "follow_date", nullable = false)
+    private LocalDateTime followDate;
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\model\FollowerId.java ---
+package com.auth.model;
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import javax.persistence.Embeddable;
+import java.io.Serializable;
+
+@Embeddable
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class FollowerId implements Serializable {
+    private Long followerId;
+    private Long followingId;
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\model\Tweet.java ---
+package com.auth.model;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import javax.persistence.*;
+import java.time.LocalDateTime;
+
+@Entity
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class Tweet {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = 280)
+    private String content;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnoreProperties({"password", "role", "hibernateLazyInitializer", "handler"})
+    private User user;
+
+    private LocalDateTime timestamp;
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\model\User.java ---
+package com.auth.model;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import javax.persistence.*;
+import java.util.*;
+
+@Entity
+@Table(name = "users")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(unique = true, nullable = false)
+    private String username;
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Column(nullable = false)
+    private String password;
+
+    private String role;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    private List<Tweet> tweets = new ArrayList<>();
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "user_followers",
+        joinColumns = @JoinColumn(name = "following_id"),
+        inverseJoinColumns = @JoinColumn(name = "follower_id")
+    )
+    @JsonIgnore
+    private Set<User> followers = new HashSet<>();
+
+    @ManyToMany(mappedBy = "followers", fetch = FetchType.LAZY)
+    @JsonIgnore
+    private Set<User> following = new HashSet<>();
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof User)) return false;
+        User user = (User) o;
+        return Objects.equals(id, user.id) &&
+               Objects.equals(username, user.username);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, username);
+    }
+
+    public Set<User> getFollowers() {
+        return followers;
+    }
+
+    public Set<User> getFollowing() {
+        return following;
+    }
+
+    public void setFollowers(Set<User> followers) {
+        this.followers = followers;
+    }
+
+    public void setFollowing(Set<User> following) {
+        this.following = following;
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\model\UserFeed.java ---
+package com.auth.model;
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import javax.persistence.*;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "user_feeds")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserFeed {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "tweet_id", nullable = false)
+    private Tweet tweet;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\repository\FollowerRepository.java ---
+package com.auth.repository;
+
+import com.auth.model.Follower;
+import com.auth.model.FollowerId;
+import com.auth.model.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+import java.util.List;
+
+@Repository
+public interface FollowerRepository extends JpaRepository<Follower, FollowerId> {
+    @Query("SELECT f.follower FROM Follower f WHERE f.following.id = ?1")
+    List<User> findFollowersByFollowingId(Long followingId);
+
+    @Query("SELECT f.following FROM Follower f WHERE f.follower.id = ?1")
+    List<User> findFollowingByFollowerId(Long followerId);
+    
+    @Query("SELECT COUNT(f) > 0 FROM Follower f WHERE f.follower.id = ?1 AND f.following.id = ?2")
+    boolean isFollowing(Long followerId, Long followingId);
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\repository\TweetRepository.java ---
+package com.auth.repository;
+
+import com.auth.model.Tweet;
+import com.auth.model.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface TweetRepository extends JpaRepository<Tweet, Long> {
+    Page<Tweet> findByUserOrderByTimestampDesc(User user, Pageable pageable);
+    Page<Tweet> findAllByOrderByTimestampDesc(Pageable pageable);
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\repository\UserFeedRepository.java ---
+package com.auth.repository;
+
+import com.auth.model.User;
+import com.auth.model.UserFeed;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface UserFeedRepository extends JpaRepository<UserFeed, Long> {
+    Page<UserFeed> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
+    
+    @Modifying
+    @Query(value = "DELETE FROM user_feeds WHERE user_id = :followerId AND tweet_id IN (SELECT id FROM tweets WHERE user_id = :unfollowedUserId)", nativeQuery = true)
+    int deleteByUserAndTweetUser(@Param("followerId") Long followerId, @Param("unfollowedUserId") Long unfollowedUserId);
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\repository\UserRepository.java ---
+package com.auth.repository;
+
+import com.auth.model.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import java.util.Optional;
+
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    Optional<User> findByUsername(String username);
+    boolean existsByUsername(String username);
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\security\JwtAuthenticationEntryPoint.java ---
+package com.auth.security;
+
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.stereotype.Component;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+@Component
+public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
+
+    @Override
+    public void commence(HttpServletRequest request,
+                        HttpServletResponse response,
+                        AuthenticationException authException) throws IOException {
+        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\security\JwtRequestFilter.java ---
+package com.auth.security;
+
+import com.auth.model.User;
+import com.auth.repository.UserRepository;
+import com.auth.service.UserService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Optional;
+
+public class JwtRequestFilter extends OncePerRequestFilter {
+    private static final Logger logger = LoggerFactory.getLogger(JwtRequestFilter.class);
+    private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
+    private final UserService userService;
+
+    public JwtRequestFilter(JwtUtil jwtUtil, UserRepository userRepository, UserService userService) {
+        this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
+        this.userService = userService;
+    }
+
+    private String getJwtFromRequest(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        try {
+            String jwt = getJwtFromRequest(request);
+            if (jwt != null && jwtUtil.validateToken(jwt)) {
+                String username = jwtUtil.extractUsername(jwt);
+                UserDetails userDetails = userService.loadUserByUsername(username);
+                Optional<User> userOpt = userRepository.findByUsername(username);
+
+                if (userOpt.isPresent()) {
+                    User user = userOpt.get();
+                    request.setAttribute("userId", user.getId());
+
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Cannot set user authentication: {}", e.getMessage());
+        }
+
+        chain.doFilter(request, response);
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\security\JwtUtil.java ---
+package com.auth.security;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.SignatureException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.SignatureAlgorithm;
+import org.springframework.stereotype.Component;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+@Component
+public class JwtUtil {
+    private String SECRET_KEY = "your_secret_key_here";
+    private int TOKEN_VALIDITY = 3600 * 5; // 5 hours
+    private static final Logger logger = LoggerFactory.getLogger(JwtUtil.class);
+
+    public String extractUsername(String token) {
+        return extractClaim(token, Claims::getSubject);
+    }
+
+    public Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
+    }
+
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
+    }
+
+    private Claims extractAllClaims(String token) {
+        return Jwts.parser().setSigningKey(SECRET_KEY).parseClaimsJws(token).getBody();
+    }
+
+    private Boolean isTokenExpired(String token) {
+        return extractExpiration(token).before(new Date());
+    }
+
+    public String generateToken(UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>();
+        return createToken(claims, userDetails.getUsername());
+    }
+
+    private String createToken(Map<String, Object> claims, String subject) {
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + TOKEN_VALIDITY * 1000))
+                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)
+                .compact();
+    }
+
+    public Boolean validateToken(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    }
+
+    public Boolean validateToken(String token) {
+        try {
+            Jwts.parser().setSigningKey(SECRET_KEY).parseClaimsJws(token);
+            return true;
+        } catch (SignatureException e) {
+            logger.error("Invalid JWT signature: {}", e.getMessage());
+        } catch (MalformedJwtException e) {
+            logger.error("Invalid JWT token: {}", e.getMessage());
+        } catch (ExpiredJwtException e) {
+            logger.error("JWT token is expired: {}", e.getMessage());
+        } catch (UnsupportedJwtException e) {
+            logger.error("JWT token is unsupported: {}", e.getMessage());
+        } catch (IllegalArgumentException e) {
+            logger.error("JWT claims string is empty: {}", e.getMessage());
+        }
+        return false;
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\security\SecurityConfig.java ---
+package com.auth.security;
+
+import com.auth.repository.UserRepository;
+import com.auth.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    private final UserService userService;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
+
+    @Autowired
+    public SecurityConfig(
+        UserService userService,
+        JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
+        JwtUtil jwtUtil,
+        UserRepository userRepository
+    ) {
+        this.userService = userService;
+        this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
+        this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
+    }
+
+    @Bean
+    public JwtRequestFilter jwtRequestFilter() {
+        return new JwtRequestFilter(jwtUtil, userRepository, userService);
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    @Override
+    public AuthenticationManager authenticationManagerBean() throws Exception {
+        return super.authenticationManagerBean();
+    }
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(userService).passwordEncoder(passwordEncoder());
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+            .cors()
+                .configurationSource(corsConfigurationSource())
+            .and()
+            .csrf()
+                .disable()
+            .authorizeRequests()
+                .antMatchers("/api/auth/**").permitAll()
+                .anyRequest().authenticated()
+            .and()
+            .exceptionHandling()
+                .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+            .and()
+            .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+
+        http.addFilterBefore(jwtRequestFilter(), UsernamePasswordAuthenticationFilter.class);
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\service\AuthService.java ---
+package com.auth.service;
+
+import com.auth.cache.CacheService;
+import com.auth.model.User;
+import com.auth.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class AuthService {
+    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private SessionManager sessionManager;
+
+    @Autowired
+    private CacheService cacheService; // Inject CacheService
+
+    // Register a new user
+    public User register(User user) {
+        logger.info("Registering user with username: {}", user.getUsername());
+
+        // Validate email format
+        if (!user.getUsername().matches("^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$")) {
+            logger.warn("Registration failed: Invalid email format for username: {}", user.getUsername());
+            throw new RuntimeException("Username must be a valid email address");
+        }
+
+        if (userRepository.existsByUsername(user.getUsername())) {
+            logger.warn("Registration failed: Username {} already exists", user.getUsername());
+            throw new RuntimeException("Username already exists");
+        }
+
+        // Validate password
+        if (user.getPassword() == null || user.getPassword().trim().isEmpty()) {
+            logger.warn("Registration failed: Password cannot be empty");
+            throw new RuntimeException("Password cannot be empty");
+        }
+
+        // Set default role if not specified
+        if (user.getRole() == null || user.getRole().isEmpty()) {
+            user.setRole("USER");
+        }
+
+        // Encrypt password before storing
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        User savedUser = userRepository.save(user);
+
+        // Add the new user to the cache
+        cacheService.addUserToCache(savedUser);
+        logger.info("User {} added to the cache after registration", user.getUsername());
+
+        return savedUser;
+    }
+
+    // Authenticate a user with username and password
+    public Optional<User> authenticate(String username, String password) {
+        logger.info("Authenticating user with username: {}", username);
+        logger.debug("Raw password received: {}", password);
+
+        // First, check the cache for the user
+        User cachedUser = cacheService.getUserByUsername(username);
+        if (cachedUser != null) {
+            logger.info("User {} found in cache", username);
+            logger.debug("Stored password hash from cache: {}", cachedUser.getPassword());
+
+            if (passwordEncoder.matches(password, cachedUser.getPassword())) {
+                logger.info("Authentication successful for user {} via cache", username);
+                return Optional.of(cachedUser);
+            } else {
+                logger.warn("Authentication failed for user {} via cache: Incorrect password", username);
+            }
+        } else {
+            logger.info("User {} not found in cache. Checking database...", username);
+        }
+
+        // If not in cache, check the database
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        if (userOpt.isPresent()) {
+            logger.info("User {} found in database", username);
+            logger.debug("Stored password hash from database: {}", userOpt.get().getPassword());
+            
+            if (passwordEncoder.matches(password, userOpt.get().getPassword())) {
+                logger.info("Authentication successful for user {} via database", username);
+
+                // Add the user to the cache after successful authentication
+                cacheService.addUserToCache(userOpt.get());
+                logger.info("User {} added to cache after successful authentication", username);
+
+                return userOpt;
+            } else {
+                logger.warn("Authentication failed for user {} via database: Incorrect password", username);
+            }
+        } else {
+            logger.warn("User {} not found in database", username);
+        }
+
+        return Optional.empty();
+    }
+
+    // Logout a user and invalidate their session
+    public void logout(String username) {
+        logger.info("Logging out user with username: {}", username);
+        sessionManager.invalidateSession(username);
+        logger.info("User {} logged out and session invalidated", username);
+    }
+
+    // Fetch all users (cached or from the database)
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\service\FeedService.java ---
+package com.auth.service;
+
+import com.auth.model.Tweet;
+import com.auth.model.User;
+import com.auth.model.UserFeed;
+import com.auth.repository.UserFeedRepository;
+import com.auth.repository.UserRepository;
+import com.auth.service.UserRelationshipService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class FeedService {
+    private static final Logger logger = LoggerFactory.getLogger(FeedService.class);
+
+    @Autowired
+    private UserFeedRepository userFeedRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private UserRelationshipService userRelationshipService;
+
+    @Transactional
+    public void addTweetToFeeds(Tweet tweet) {
+        logger.info("Adding tweet {} to feeds", tweet.getId());
+        
+        // Get all followers of the tweet's author
+        List<User> followers = userRelationshipService.getFollowers(tweet.getUser().getId());
+        logger.info("Found {} followers for user {}", followers.size(), tweet.getUser().getId());
+        
+        // Add tweet to each follower's feed
+        for (User follower : followers) {
+            UserFeed feedItem = new UserFeed();
+            feedItem.setUser(follower);
+            feedItem.setTweet(tweet);
+            feedItem.setCreatedAt(LocalDateTime.now());
+            userFeedRepository.save(feedItem);
+        }
+        logger.info("Added tweet {} to {} follower feeds", tweet.getId(), followers.size());
+
+        // Also add to the author's own feed
+        UserFeed authorFeed = new UserFeed();
+        authorFeed.setUser(tweet.getUser());
+        authorFeed.setTweet(tweet);
+        authorFeed.setCreatedAt(LocalDateTime.now());
+        userFeedRepository.save(authorFeed);
+        logger.info("Added tweet {} to author's feed", tweet.getId());
+    }
+
+    @Transactional
+    public void removeUserTweetsFromFeed(Long followerId, Long unfollowedUserId) {
+        logger.info("Removing tweets from follower {} feed for user {}", followerId, unfollowedUserId);
+        
+        try {
+            int deletedCount = userFeedRepository.deleteByUserAndTweetUser(followerId, unfollowedUserId);
+            logger.info("Removed {} tweets from feed", deletedCount);
+        } catch (Exception e) {
+            logger.error("Feed cleanup failed: {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Tweet> getFeedForUser(Long userId, Pageable pageable) {
+        logger.info("Fetching feed for user {}", userId);
+        
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                
+        Page<UserFeed> userFeeds = userFeedRepository.findByUserOrderByCreatedAtDesc(user, pageable);
+        List<Tweet> tweets = userFeeds.stream()
+                .map(UserFeed::getTweet)
+                .collect(Collectors.toList());
+                
+        logger.info("Found {} tweets in feed", tweets.size());
+        return new PageImpl<>(tweets, pageable, userFeeds.getTotalElements());
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\service\SessionManager.java ---
+package com.auth.service;
+
+import org.springframework.stereotype.Service;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+@Service
+public class SessionManager {
+    private final Map<String, String> sessions = new HashMap<>();
+
+    public void createSession(String username, String token) {
+        sessions.put(username, token);
+    }
+
+    public Optional<String> getSession(String username) {
+        return Optional.ofNullable(sessions.get(username));
+    }
+
+    public void invalidateSession(String username) {
+        sessions.remove(username);
+    }
+
+    public boolean isSessionValid(String username, String token) {
+        String storedToken = sessions.get(username);
+        return storedToken != null && storedToken.equals(token);
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\service\SocialGraphService.java ---
+package com.auth.service;
+
+import com.auth.graph.SocialGraph;
+import com.auth.model.User;
+import com.auth.model.Tweet;
+import com.auth.repository.UserRepository;
+import com.auth.service.FeedService;
+import com.auth.service.UserRelationshipService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.annotation.PostConstruct;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class SocialGraphService {
+    private static final Logger logger = LoggerFactory.getLogger(SocialGraphService.class);
+    
+    private final SocialGraph socialGraph;
+    private final UserRepository userRepository;
+    private final FeedService feedService;
+    private final UserRelationshipService userRelationshipService;
+
+    @Autowired
+    public SocialGraphService(SocialGraph socialGraph, UserRepository userRepository, 
+                            FeedService feedService, UserRelationshipService userRelationshipService) {
+        this.socialGraph = socialGraph;
+        this.userRepository = userRepository;
+        this.feedService = feedService;
+        this.userRelationshipService = userRelationshipService;
+        initializeGraph();
+    }
+
+    // Initialize graph with existing users from database
+    @PostConstruct
+    @Transactional(readOnly = true)
+    private void initializeGraph() {
+        try {
+            // Load all users from database
+            List<User> users = userRepository.findAll();
+            
+            // Add all users to graph
+            for (User user : users) {
+                socialGraph.addUser(user);
+            }
+
+            // Add all following relationships
+            for (User user : users) {
+                List<User> following = userRelationshipService.getFollowing(user.getId());
+                for (User followedUser : following) {
+                    socialGraph.addFollowing(user.getId(), followedUser.getId());
+                }
+            }
+            logger.info("Successfully initialized social graph with {} users", users.size());
+        } catch (Exception e) {
+            logger.error("Error initializing social graph: {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    // Follow a user
+    @Transactional
+    public void followUser(Long followerId, Long followingId) {
+        if (followerId.equals(followingId)) {
+            throw new IllegalArgumentException("Users cannot follow themselves");
+        }
+
+        User follower = userRepository.findById(followerId)
+            .orElseThrow(() -> new IllegalArgumentException("Follower not found"));
+        User following = userRepository.findById(followingId)
+            .orElseThrow(() -> new IllegalArgumentException("Following user not found"));
+
+        // Check if already following
+        if (socialGraph.isFollowing(followerId, followingId)) {
+            return; // Already following, no need to do anything
+        }
+
+        // Add to graph first
+        socialGraph.addUser(follower);
+        socialGraph.addUser(following);
+        socialGraph.addFollowing(followerId, followingId);
+
+        // Update database
+        follower.getFollowing().add(following);
+        following.getFollowers().add(follower);
+        
+        // Save only the follower since the relationship is managed from the follower side
+        userRepository.save(follower);
+    }
+
+    // Unfollow a user
+    @Transactional
+    public void unfollowUser(Long followerId, Long followingId) {
+        logger.info("Starting unfollow process - Follower: {}, Unfollowing: {}", followerId, followingId);
+        
+        if (followerId.equals(followingId)) {
+            logger.warn("Attempted to unfollow self - User: {}", followerId);
+            throw new IllegalArgumentException("Users cannot unfollow themselves");
+        }
+        
+        User follower = userRepository.findById(followerId)
+            .orElseThrow(() -> new IllegalArgumentException("Follower not found"));
+        User following = userRepository.findById(followingId)
+            .orElseThrow(() -> new IllegalArgumentException("Following user not found"));
+
+        // Check if not following
+        if (!socialGraph.isFollowing(followerId, followingId)) {
+            logger.warn("Not following user - Follower: {}, Target: {}", followerId, followingId);
+            return; // Not following, no need to do anything
+        }
+
+        try {
+            // Remove from graph
+            socialGraph.removeFollowing(followerId, followingId);
+
+            // Update database relationships
+            follower.getFollowing().remove(following);
+            following.getFollowers().remove(follower);
+            userRepository.save(follower);
+
+            // Clean up the feed
+            feedService.removeUserTweetsFromFeed(followerId, followingId);
+            
+            logger.info("Successfully unfollowed user - Follower: {}, Unfollowed: {}", followerId, followingId);
+        } catch (Exception e) {
+            logger.error("Error during unfollow process: {}", e.getMessage());
+            throw new RuntimeException("Failed to unfollow user", e);
+        }
+    }
+
+    private void validateUsers(Long followerId, Long followingId) {
+        User follower = userRepository.findById(followerId)
+            .orElseThrow(() -> new IllegalArgumentException("Follower not found"));
+        User following = userRepository.findById(followingId)
+            .orElseThrow(() -> new IllegalArgumentException("Following user not found"));
+
+        // Check if not following
+        if (!socialGraph.isFollowing(followerId, followingId)) {
+            return; // Not following, no need to do anything
+        }
+
+        // Update database
+        follower.getFollowing().remove(following);
+        following.getFollowers().remove(follower);
+        
+        // Save both users to persist the relationship changes
+        userRepository.save(follower);
+        userRepository.save(following);
+    }
+
+    // Get user's followers
+    public Set<User> getFollowers(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        socialGraph.addUser(user); // Ensure user exists in graph
+        return socialGraph.getFollowers(userId);
+    }
+
+    // Get users that a user is following
+    public Set<User> getFollowing(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        socialGraph.addUser(user); // Ensure user exists in graph
+        return socialGraph.getFollowing(userId);
+    }
+
+    // Get user's followers as a list
+    public List<User> getFollowersList(Long userId) {
+        return userRelationshipService.getFollowers(userId);
+    }
+
+    // Get users that a user is following as a list
+    public List<User> getFollowingList(Long userId) {
+        return userRelationshipService.getFollowing(userId);
+    }
+
+    // Check if one user follows another
+    public boolean isFollowing(Long followerId, Long followingId) {
+        User follower = userRepository.findById(followerId)
+            .orElseThrow(() -> new IllegalArgumentException("Follower not found"));
+        User following = userRepository.findById(followingId)
+            .orElseThrow(() -> new IllegalArgumentException("Following user not found"));
+        socialGraph.addUser(follower); // Ensure user exists in graph
+        socialGraph.addUser(following); // Ensure user exists in graph
+        return socialGraph.isFollowing(followerId, followingId);
+    }
+
+    // Get suggested users to follow
+    public Set<User> getSuggestedUsers(Long userId, int maxSuggestions) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        socialGraph.addUser(user); // Ensure user exists in graph
+        return socialGraph.getSuggestedUsers(userId, maxSuggestions);
+    }
+
+    // Get users for feed generation
+    public List<Long> getFeedUsers(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        socialGraph.addUser(user); // Ensure user exists in graph
+        List<Long> feedUsers = new ArrayList<>(socialGraph.getFollowing(userId).stream()
+            .map(User::getId)
+            .collect(Collectors.toList()));
+        feedUsers.add(userId); // Add the user's own tweets to the feed
+        return feedUsers;
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\service\TweetService.java ---
+package com.auth.service;
+
+import com.auth.model.Tweet;
+import com.auth.model.User;
+import com.auth.model.UserFeed;
+import com.auth.repository.TweetRepository;
+import com.auth.repository.UserRepository;
+import com.auth.service.FeedService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDateTime;
+
+@Service
+public class TweetService {
+    @Autowired
+    private TweetRepository tweetRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private FeedService feedService;
+
+    @Transactional
+    public Tweet createTweet(Long userId, String content) {
+        if (content == null || content.trim().isEmpty()) {
+            throw new IllegalArgumentException("Tweet content cannot be empty");
+        }
+        if (content.length() > 280) {
+            throw new IllegalArgumentException("Tweet content cannot exceed 280 characters");
+        }
+
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Tweet tweet = new Tweet();
+        tweet.setContent(content.trim());
+        tweet.setTimestamp(LocalDateTime.now());
+        tweet.setUser(user);
+
+        tweet = tweetRepository.save(tweet);
+        
+        // Add tweet to followers' feeds
+        feedService.addTweetToFeeds(tweet);
+
+        return tweet;
+    }
+
+    public Page<Tweet> getUserTweets(Long userId, int page, int size) {
+        if (size > 50) {
+            size = 50; // Limit maximum page size
+        }
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+            
+        return tweetRepository.findByUserOrderByTimestampDesc(
+            user,
+            PageRequest.of(page, size)
+        );
+    }
+
+    public Page<Tweet> getTweets(int page, int size) {
+        if (size > 50) {
+            size = 50; // Limit maximum page size
+        }
+        return tweetRepository.findAllByOrderByTimestampDesc(
+            PageRequest.of(page, size)
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Tweet> getFeedForUser(Long userId, int page, int size) {
+        return feedService.getFeedForUser(userId, PageRequest.of(page, size));
+    }
+    
+    @Transactional
+    public void deleteTweet(Long userId, Long tweetId) {
+        Tweet tweet = tweetRepository.findById(tweetId)
+            .orElseThrow(() -> new RuntimeException("Tweet not found"));
+            
+        if (!tweet.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Not authorized to delete this tweet");
+        }
+        
+        tweetRepository.delete(tweet);
+    }
+}
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\service\UserRelationshipService.java ---
+package com.auth.service;
+
+import com.auth.model.User;
+import com.auth.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+public class UserRelationshipService {
+    @Autowired
+    private UserRepository userRepository;
+
+    @Transactional(readOnly = true)
+    public List<User> getFollowers(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        return new ArrayList<>(user.getFollowers());
+    }
+
+    @Transactional(readOnly = true)
+    public List<User> getFollowing(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        return new ArrayList<>(user.getFollowing());
+    }
+
+    @Transactional(readOnly = true)
+    public User getUser(Long userId) {
+        return userRepository.findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\service\UserSearchService.java ---
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\main\java\com\auth\service\UserService.java ---
+package com.auth.service;
+
+import com.auth.model.User;
+import com.auth.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import java.util.Collections;
+
+@Service
+public class UserService implements UserDetailsService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
+
+        return new org.springframework.security.core.userdetails.User(
+            user.getUsername(),
+            user.getPassword(),
+            Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole()))
+        );
+    }
+
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username)
+            .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\test\java\com\auth\PasswordHashGenerator.java ---
+package com.auth;
+
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
+public class PasswordHashGenerator {
+    public static void main(String[] args) {
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+        
+        String password1 = "shashank";
+        String password2 = "test123";
+        
+        System.out.println("Hash for '" + password1 + "': " + encoder.encode(password1));
+        System.out.println("Hash for '" + password2 + "': " + encoder.encode(password2));
+    }
+}
+
+
+--- c:/Users/gonch/Desktop/TwitterDSA-main/TwitterDSA-main/backend\src\test\java\com\auth\PasswordHashVerifier.java ---
+package com.auth;
+
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
+public class PasswordHashVerifier {
+    public static void main(String[] args) {
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+        String storedHash = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+        String rawPassword = "test123";
+        
+        boolean matches = encoder.matches(rawPassword, storedHash);
+        System.out.println("Password 'test123' matches stored hash: " + matches);
+        
+        // Generate a new hash for the same password to compare structure
+        String newHash = encoder.encode(rawPassword);
+        System.out.println("New hash generated for 'test123': " + newHash);
+        System.out.println("New hash matches password: " + encoder.matches(rawPassword, newHash));
+    }
+}
+
+

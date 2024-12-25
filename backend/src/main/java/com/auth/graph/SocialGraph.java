@@ -10,15 +10,50 @@ import java.util.stream.Collectors;
 @Component
 @Scope("singleton")
 public class SocialGraph {
-    // Adjacency list representation using ConcurrentHashMap for thread safety
-    private final Map<Long, Set<Long>> followers;
-    private final Map<Long, Set<Long>> following;
+    private final DirectedGraph followGraph;
     private final Map<Long, User> users;
 
     public SocialGraph() {
-        this.followers = new ConcurrentHashMap<>();
-        this.following = new ConcurrentHashMap<>();
+        this.followGraph = new DirectedGraph();
         this.users = new ConcurrentHashMap<>();
+    }
+
+    // Inner class representing a thread-safe directed graph
+    private static class DirectedGraph {
+        private final Map<Long, Set<Long>> followers;
+        private final Map<Long, Set<Long>> following;
+
+        public DirectedGraph() {
+            this.followers = new ConcurrentHashMap<>();
+            this.following = new ConcurrentHashMap<>();
+        }
+
+        public synchronized void addNode(Long nodeId) {
+            followers.putIfAbsent(nodeId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+            following.putIfAbsent(nodeId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+        }
+
+        public synchronized void addEdge(Long fromNode, Long toNode) {
+            following.get(fromNode).add(toNode);
+            followers.get(toNode).add(fromNode);
+        }
+
+        public synchronized void removeEdge(Long fromNode, Long toNode) {
+            following.get(fromNode).remove(toNode);
+            followers.get(toNode).remove(fromNode);
+        }
+
+        public Set<Long> getFollowers(Long nodeId) {
+            return new HashSet<>(followers.getOrDefault(nodeId, Collections.emptySet()));
+        }
+
+        public Set<Long> getFollowing(Long nodeId) {
+            return new HashSet<>(following.getOrDefault(nodeId, Collections.emptySet()));
+        }
+
+        public boolean hasEdge(Long fromNode, Long toNode) {
+            return following.containsKey(fromNode) && following.get(fromNode).contains(toNode);
+        }
     }
 
     // Add a user to the graph
@@ -29,8 +64,7 @@ public class SocialGraph {
 
         Long userId = user.getId();
         users.putIfAbsent(userId, user);
-        followers.putIfAbsent(userId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
-        following.putIfAbsent(userId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+        followGraph.addNode(userId);
     }
 
     // Add a following relationship (edge)
@@ -42,10 +76,7 @@ public class SocialGraph {
             throw new IllegalArgumentException("Following user not found in graph");
         }
 
-        // Add to following set of follower
-        following.get(followerId).add(followingId);
-        // Add to followers set of following
-        followers.get(followingId).add(followerId);
+        followGraph.addEdge(followerId, followingId);
     }
 
     // Remove a following relationship (edge)
@@ -57,10 +88,7 @@ public class SocialGraph {
             throw new IllegalArgumentException("Following user not found in graph");
         }
 
-        // Remove from following set of follower
-        following.get(followerId).remove(followingId);
-        // Remove from followers set of following
-        followers.get(followingId).remove(followerId);
+        followGraph.removeEdge(followerId, followingId);
     }
 
     // Get all followers of a user
@@ -69,7 +97,7 @@ public class SocialGraph {
             throw new IllegalArgumentException("User not found in graph");
         }
 
-        return followers.get(userId).stream()
+        return followGraph.getFollowers(userId).stream()
             .map(users::get)
             .collect(Collectors.toSet());
     }
@@ -80,7 +108,7 @@ public class SocialGraph {
             throw new IllegalArgumentException("User not found in graph");
         }
 
-        return following.get(userId).stream()
+        return followGraph.getFollowing(userId).stream()
             .map(users::get)
             .collect(Collectors.toSet());
     }
@@ -90,7 +118,7 @@ public class SocialGraph {
         if (!users.containsKey(followerId) || !users.containsKey(followingId)) {
             return false;
         }
-        return following.get(followerId).contains(followingId);
+        return followGraph.hasEdge(followerId, followingId);
     }
 
     // Get suggested users (friends of friends)
@@ -100,11 +128,11 @@ public class SocialGraph {
         }
 
         Set<Long> suggestedIds = new HashSet<>();
-        Set<Long> alreadyFollowing = following.get(userId);
+        Set<Long> alreadyFollowing = followGraph.getFollowing(userId);
 
         // Add friends of friends
-        for (Long followingId : following.get(userId)) {
-            suggestedIds.addAll(following.get(followingId));
+        for (Long followingId : alreadyFollowing) {
+            suggestedIds.addAll(followGraph.getFollowing(followingId));
         }
 
         // Remove the user themselves and users they already follow
@@ -118,5 +146,17 @@ public class SocialGraph {
             .limit(maxSuggestions)
             .map(users::get)
             .collect(Collectors.toSet());
+    }
+
+    // Get users for generating a feed (user + following)
+    public Set<User> getFeedUsers(Long userId) {
+        if (!users.containsKey(userId)) {
+            throw new IllegalArgumentException("User not found in graph");
+        }
+
+        Set<User> feedUsers = new HashSet<>();
+        feedUsers.add(users.get(userId)); // Add the user themselves
+        feedUsers.addAll(getFollowing(userId)); // Add all users they follow
+        return feedUsers;
     }
 }
