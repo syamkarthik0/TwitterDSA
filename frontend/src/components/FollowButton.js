@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@mui/material';
-import { followUser, unfollowUser, getFollowing } from '../services/socialGraphService';
+import { followUser, unfollowUser, getFollowing } from '../services/followService';
 
 const FollowButton = ({ userId, onFollowChange }) => {
     const [isFollowing, setIsFollowing] = useState(false);

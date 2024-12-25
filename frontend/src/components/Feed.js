@@ -9,10 +9,32 @@ const Feed = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const currentUsername = localStorage.getItem('username');
+    const [page, setPage] = useState(0); // For pagination
 
+
+    // Fetch feed on component mount and when page changes
     useEffect(() => {
-        loadTweets();
-    }, []);
+        const fetchFeed = async () => {
+            try {
+                setLoading(true);
+                const feedTweets = await getFeed(page); // Fetch feed using page number
+    
+                // Filter out duplicate tweets based on tweet id
+                setTweets(prevTweets => {
+                    const tweetIds = new Set(prevTweets.map(tweet => tweet.id));
+                    const uniqueTweets = feedTweets.filter(tweet => !tweetIds.has(tweet.id));
+                    return [...prevTweets, ...uniqueTweets]; // Append only unique tweets
+                });
+            } catch (error) {
+                setError(error.message || 'Failed to load feed');
+            } finally {
+                setLoading(false);
+            }
+        };
+    
+        fetchFeed();
+    }, [page]);
+    
 
     const loadTweets = async () => {
         try {
@@ -31,8 +53,14 @@ const Feed = () => {
     };
 
     const handleNewTweet = (newTweet) => {
-        setTweets(prevTweets => [newTweet, ...prevTweets]);
+        setTweets(prevTweets => {
+            if (prevTweets.some(tweet => tweet.id === newTweet.id)) {
+                return prevTweets; // If the tweet already exists, return the same list
+            }
+            return [newTweet, ...prevTweets]; // Otherwise, add the new tweet
+        });
     };
+    
 
     if (loading) {
         return (

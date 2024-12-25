@@ -1,5 +1,31 @@
 const API_URL = 'http://localhost:8081/api';
 
+export const getFeed = async (page) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            throw new Error('Please log in to fetch the feed');
+        }
+
+        const response = await fetch(`${API_URL}/tweets/feed?page=${page}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load tweets');
+        }
+
+        const data = await response.json();
+        return data.content || []; // Ensure proper data structure
+    } catch (error) {
+        console.error('Error fetching feed:', error);
+        throw error;
+    }
+};
+
+
 export const createTweet = async (content) => {
     try {
         const token = localStorage.getItem('token');
@@ -28,30 +54,6 @@ export const createTweet = async (content) => {
     }
 };
 
-export const getFeed = async (page = 0, size = 10) => {
-    try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            throw new Error('Please log in to view your feed');
-        }
-
-        const response = await fetch(`${API_URL}/tweets/feed?page=${page}&size=${size}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(error || 'Failed to fetch feed');
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error('Error fetching feed:', error);
-        throw error;
-    }
-};
 
 export const getUserTweets = async (userId, page = 0, size = 10) => {
     try {

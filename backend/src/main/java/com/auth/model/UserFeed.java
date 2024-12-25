@@ -26,4 +26,11 @@ public class UserFeed {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    // Add this constructor
+    public UserFeed(User user, Tweet tweet, LocalDateTime createdAt) {
+        this.user = user;
+        this.tweet = tweet;
+        this.createdAt = createdAt;
+    }
 }
