@@ -5,6 +5,7 @@ import com.auth.model.User;
 import com.auth.model.UserFeed;
 import com.auth.repository.UserFeedRepository;
 import com.auth.repository.UserRepository;
+import com.auth.service.UserRelationshipService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,14 +31,14 @@ public class FeedService {
     private UserRepository userRepository;
 
     @Autowired
-    private FollowService followService;
+    private UserRelationshipService userRelationshipService;
 
     @Transactional
     public void addTweetToFeeds(Tweet tweet) {
         logger.info("Adding tweet {} to feeds", tweet.getId());
         
         // Get all followers of the tweet's author
-        List<User> followers = followService.getFollowers(tweet.getUser().getId());
+        List<User> followers = userRelationshipService.getFollowers(tweet.getUser().getId());
         logger.info("Found {} followers for user {}", followers.size(), tweet.getUser().getId());
         
         // Add tweet to each follower's feed

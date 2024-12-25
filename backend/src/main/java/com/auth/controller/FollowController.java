@@ -1,7 +1,7 @@
 package com.auth.controller;
 
 import com.auth.model.User;
-import com.auth.service.FollowService;
+import com.auth.service.SocialGraphService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +19,7 @@ public class FollowController {
     private static final Logger logger = LoggerFactory.getLogger(FollowController.class);
 
     @Autowired
-    private FollowService followService;
+    private SocialGraphService socialGraphService;
 
     @PostMapping("/{followingId}")
     public ResponseEntity<?> followUser(HttpServletRequest request, @PathVariable Long followingId) {
@@ -32,7 +32,7 @@ public class FollowController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Not authenticated"));
             }
 
-            followService.followUser(followerId, followingId);
+            socialGraphService.followUser(followerId, followingId);
             return ResponseEntity.ok(Map.of("message", "Successfully followed user"));
         } catch (IllegalArgumentException e) {
             logger.error("Invalid follow request: {}", e.getMessage());
@@ -57,7 +57,7 @@ public class FollowController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Not authenticated"));
             }
 
-            followService.unfollowUser(followerId, followingId);
+            socialGraphService.unfollowUser(followerId, followingId);
             return ResponseEntity.ok(Map.of("message", "Successfully unfollowed user"));
         } catch (Exception e) {
             logger.error("Error in unfollowUser: {}", e.getMessage());
@@ -68,7 +68,7 @@ public class FollowController {
     @GetMapping("/followers/{userId}")
     public ResponseEntity<List<User>> getFollowers(@PathVariable Long userId) {
         try {
-            return ResponseEntity.ok(followService.getFollowers(userId));
+            return ResponseEntity.ok(socialGraphService.getFollowersList(userId));
         } catch (Exception e) {
             logger.error("Error getting followers for user {}: {}", userId, e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -78,7 +78,7 @@ public class FollowController {
     @GetMapping("/following/{userId}")
     public ResponseEntity<List<User>> getFollowing(@PathVariable Long userId) {
         try {
-            return ResponseEntity.ok(followService.getFollowing(userId));
+            return ResponseEntity.ok(socialGraphService.getFollowingList(userId));
         } catch (Exception e) {
             logger.error("Error getting following for user {}: {}", userId, e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -88,7 +88,7 @@ public class FollowController {
     @GetMapping("/check/{userId}/{followingId}")
     public ResponseEntity<Boolean> isFollowing(@PathVariable Long userId, @PathVariable Long followingId) {
         try {
-            return ResponseEntity.ok(followService.isFollowing(userId, followingId));
+            return ResponseEntity.ok(socialGraphService.isFollowing(userId, followingId));
         } catch (Exception e) {
             logger.error("Error checking follow status for {} following {}: {}", userId, followingId, e.getMessage());
             return ResponseEntity.badRequest().build();

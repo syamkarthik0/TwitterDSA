@@ -5,6 +5,7 @@ import com.auth.model.User;
 import com.auth.model.Tweet;
 import com.auth.repository.UserRepository;
 import com.auth.service.FeedService;
+import com.auth.service.UserRelationshipService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,12 +23,15 @@ public class SocialGraphService {
     private final SocialGraph socialGraph;
     private final UserRepository userRepository;
     private final FeedService feedService;
+    private final UserRelationshipService userRelationshipService;
 
     @Autowired
-    public SocialGraphService(SocialGraph socialGraph, UserRepository userRepository, FeedService feedService) {
+    public SocialGraphService(SocialGraph socialGraph, UserRepository userRepository, 
+                            FeedService feedService, UserRelationshipService userRelationshipService) {
         this.socialGraph = socialGraph;
         this.userRepository = userRepository;
         this.feedService = feedService;
+        this.userRelationshipService = userRelationshipService;
         initializeGraph();
     }
 
@@ -36,7 +40,7 @@ public class SocialGraphService {
     @Transactional(readOnly = true)
     private void initializeGraph() {
         try {
-            // Load all users and their relationships from database
+            // Load all users from database
             List<User> users = userRepository.findAll();
             
             // Add all users to graph
@@ -46,14 +50,15 @@ public class SocialGraphService {
 
             // Add all following relationships
             for (User user : users) {
-                for (User following : user.getFollowing()) {
-                    socialGraph.addFollowing(user.getId(), following.getId());
+                List<User> following = userRelationshipService.getFollowing(user.getId());
+                for (User followedUser : following) {
+                    socialGraph.addFollowing(user.getId(), followedUser.getId());
                 }
             }
+            logger.info("Successfully initialized social graph with {} users", users.size());
         } catch (Exception e) {
-            // Log the error but don't throw it to allow the application to start
-            System.err.println("Error initializing social graph: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error initializing social graph: {}", e.getMessage());
+            throw e;
         }
     }
 
@@ -104,28 +109,26 @@ public class SocialGraphService {
 
         // Check if not following
         if (!socialGraph.isFollowing(followerId, followingId)) {
-            logger.info("Not following user {} -> {}, no action needed", followerId, followingId);
-            return;
+            logger.warn("Not following user - Follower: {}, Target: {}", followerId, followingId);
+            return; // Not following, no need to do anything
         }
 
-        // Update database relationships
-        follower.getFollowing().remove(following);
-        following.getFollowers().remove(follower);
-        userRepository.save(follower);
-        userRepository.save(following);
-        
-        // Remove from social graph
-        socialGraph.removeFollowing(followerId, followingId);
-        logger.info("Removed follower from social graph");
-        
-        // Remove tweets from feed
         try {
-            logger.info("Attempting to remove tweets from feed");
+            // Remove from graph
+            socialGraph.removeFollowing(followerId, followingId);
+
+            // Update database relationships
+            follower.getFollowing().remove(following);
+            following.getFollowers().remove(follower);
+            userRepository.save(follower);
+
+            // Clean up the feed
             feedService.removeUserTweetsFromFeed(followerId, followingId);
-            logger.info("Successfully removed tweets from feed");
+            
+            logger.info("Successfully unfollowed user - Follower: {}, Unfollowed: {}", followerId, followingId);
         } catch (Exception e) {
-            logger.error("Error removing tweets from feed: {}", e.getMessage());
-            throw e;
+            logger.error("Error during unfollow process: {}", e.getMessage());
+            throw new RuntimeException("Failed to unfollow user", e);
         }
     }
 
@@ -163,6 +166,16 @@ public class SocialGraphService {
             .orElseThrow(() -> new IllegalArgumentException("User not found"));
         socialGraph.addUser(user); // Ensure user exists in graph
         return socialGraph.getFollowing(userId);
+    }
+
+    // Get user's followers as a list
+    public List<User> getFollowersList(Long userId) {
+        return userRelationshipService.getFollowers(userId);
+    }
+
+    // Get users that a user is following as a list
+    public List<User> getFollowingList(Long userId) {
+        return userRelationshipService.getFollowing(userId);
     }
 
     // Check if one user follows another

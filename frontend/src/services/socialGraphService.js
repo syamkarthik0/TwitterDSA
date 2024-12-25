@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:8081/api/social';
+const API_URL = 'http://localhost:8081/api/follow';
 
 export const followUser = async (followingId) => {
     try {
@@ -31,8 +31,8 @@ export const unfollowUser = async (followingId) => {
             throw new Error('Please log in to unfollow users');
         }
 
-        const response = await fetch(`${API_URL}/unfollow/${followingId}`, {
-            method: 'POST',
+        const response = await fetch(`${API_URL}/${followingId}`, {
+            method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`
             }
