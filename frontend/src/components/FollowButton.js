@@ -10,7 +10,7 @@ const FollowButton = ({ userId, onFollowChange }) => {
         // Check if the current user is following this user
         const checkFollowStatus = async () => {
             try {
-                const following = await getFollowing();
+                const following = await getFollowing('me');
                 setIsFollowing(following.some(user => user.id === userId));
             } catch (error) {
                 console.error('Error checking follow status:', error);

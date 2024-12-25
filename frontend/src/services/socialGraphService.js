@@ -7,7 +7,7 @@ export const followUser = async (followingId) => {
             throw new Error('Please log in to follow users');
         }
 
-        const response = await fetch(`${API_URL}/follow/${followingId}`, {
+        const response = await fetch(`${API_URL}/${followingId}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -48,14 +48,14 @@ export const unfollowUser = async (followingId) => {
     }
 };
 
-export const getFollowers = async () => {
+export const getFollowers = async (userId) => {
     try {
         const token = localStorage.getItem('token');
         if (!token) {
             throw new Error('Please log in to view followers');
         }
 
-        const response = await fetch(`${API_URL}/followers`, {
+        const response = await fetch(`${API_URL}/followers/${userId || 'me'}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -63,24 +63,24 @@ export const getFollowers = async () => {
 
         if (!response.ok) {
             const error = await response.text();
-            throw new Error(error || 'Failed to fetch followers');
+            throw new Error(error || 'Failed to get followers');
         }
 
         return await response.json();
     } catch (error) {
-        console.error('Error fetching followers:', error);
+        console.error('Error getting followers:', error);
         throw error;
     }
 };
 
-export const getFollowing = async () => {
+export const getFollowing = async (userId) => {
     try {
         const token = localStorage.getItem('token');
         if (!token) {
             throw new Error('Please log in to view following');
         }
 
-        const response = await fetch(`${API_URL}/following`, {
+        const response = await fetch(`${API_URL}/following/${userId || 'me'}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -88,12 +88,12 @@ export const getFollowing = async () => {
 
         if (!response.ok) {
             const error = await response.text();
-            throw new Error(error || 'Failed to fetch following');
+            throw new Error(error || 'Failed to get following');
         }
 
         return await response.json();
     } catch (error) {
-        console.error('Error fetching following:', error);
+        console.error('Error getting following:', error);
         throw error;
     }
 };
