@@ -1,5 +1,6 @@
 package com.auth.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -24,5 +25,6 @@ public class Tweet {
     @JsonIgnoreProperties({"password", "role", "hibernateLazyInitializer", "handler"})
     private User user;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
     private LocalDateTime timestamp;
 }

@@ -2,6 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import FollowButton from './FollowButton';
 
+import { DateTime } from 'luxon';
+
 const Tweet = ({ tweet, username: currentUsername }) => {
     // Add null checks
     if (!tweet || !tweet.user) {
@@ -10,7 +12,8 @@ const Tweet = ({ tweet, username: currentUsername }) => {
 
     const isOwnTweet = tweet.user.username === currentUsername;
     // Use timestamp from backend
-    const formattedDate = new Date(tweet.timestamp).toLocaleString();
+    const formattedDate = DateTime.fromISO(tweet.timestamp, { zone: 'utc' }).toLocaleString(DateTime.DATETIME_MED);
+
 
     return (
         <div style={styles.tweet}>
