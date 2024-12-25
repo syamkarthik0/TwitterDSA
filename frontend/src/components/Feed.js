@@ -9,11 +9,16 @@ const Feed = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const currentUsername = localStorage.getItem('username');
+<<<<<<< HEAD
     const [page, setPage] = useState(0); // For pagination
+=======
+    const REFRESH_INTERVAL = 10000; // Refresh every 10 seconds
+>>>>>>> f287bc799193aa5019c53b42aa41c4f993869bbe
 
 
     // Fetch feed on component mount and when page changes
     useEffect(() => {
+<<<<<<< HEAD
         const fetchFeed = async () => {
             try {
                 setLoading(true);
@@ -35,6 +40,17 @@ const Feed = () => {
         fetchFeed();
     }, [page]);
     
+=======
+        // Initial load
+        loadTweets();
+
+        // Set up auto-refresh interval
+        const intervalId = setInterval(loadTweets, REFRESH_INTERVAL);
+
+        // Cleanup interval on component unmount
+        return () => clearInterval(intervalId);
+    }, []); // Empty dependency array means this effect runs once on mount
+>>>>>>> f287bc799193aa5019c53b42aa41c4f993869bbe
 
     const loadTweets = async () => {
         try {
@@ -62,7 +78,7 @@ const Feed = () => {
     };
     
 
-    if (loading) {
+    if (loading && tweets.length === 0) {
         return (
             <Box sx={{ margin: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
                 <CircularProgress />
@@ -90,6 +106,11 @@ const Feed = () => {
                 </Paper>
             ) : (
                 <Box>
+                    {loading && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', padding: 1 }}>
+                            <CircularProgress size={20} />
+                        </Box>
+                    )}
                     {tweets.map(tweet => (
                         <Box key={tweet.id} sx={{ marginBottom: 2 }}>
                             <Tweet tweet={tweet} username={currentUsername} />
