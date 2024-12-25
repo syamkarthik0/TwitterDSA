@@ -9,16 +9,11 @@ const Feed = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const currentUsername = localStorage.getItem('username');
-<<<<<<< HEAD
     const [page, setPage] = useState(0); // For pagination
-=======
-    const REFRESH_INTERVAL = 10000; // Refresh every 10 seconds
->>>>>>> f287bc799193aa5019c53b42aa41c4f993869bbe
 
 
     // Fetch feed on component mount and when page changes
     useEffect(() => {
-<<<<<<< HEAD
         const fetchFeed = async () => {
             try {
                 setLoading(true);
@@ -40,17 +35,6 @@ const Feed = () => {
         fetchFeed();
     }, [page]);
     
-=======
-        // Initial load
-        loadTweets();
-
-        // Set up auto-refresh interval
-        const intervalId = setInterval(loadTweets, REFRESH_INTERVAL);
-
-        // Cleanup interval on component unmount
-        return () => clearInterval(intervalId);
-    }, []); // Empty dependency array means this effect runs once on mount
->>>>>>> f287bc799193aa5019c53b42aa41c4f993869bbe
 
     const loadTweets = async () => {
         try {
