@@ -1,66 +1,58 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Card, CardContent, Typography, Box, Avatar } from '@mui/material';
+import { formatDistanceToNow } from 'date-fns';
 import FollowButton from './FollowButton';
 
-const Tweet = ({ tweet, username: currentUsername }) => {
+const Tweet = ({ tweet, username: currentUsername, onFollowChange }) => {
     // Add null checks
     if (!tweet || !tweet.user) {
         return null;
     }
 
-    const isOwnTweet = tweet.user.username === currentUsername;
-    // Use timestamp from backend
-    const formattedDate = new Date(tweet.timestamp).toLocaleString();
+    const { user, content, timestamp } = tweet;
+    const isOwnTweet = user.username === currentUsername;
+
+    // Format the timestamp
+    const getTimeAgo = () => {
+        try {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            if (isNaN(date.getTime())) return ''; // Invalid date
+            return formatDistanceToNow(date, { addSuffix: true });
+        } catch (error) {
+            console.error('Error formatting timestamp:', error);
+            return '';
+        }
+    };
 
     return (
-        <div style={styles.tweet}>
-            <div style={styles.header}>
-                <Link 
-                    to={`/profile/${tweet.user.username}`}
-                    style={styles.username}
-                >
-                    {tweet.user.username}
-                </Link>
-                {!isOwnTweet && tweet.user.id && (
-                    <FollowButton userId={tweet.user.id} />
-                )}
-            </div>
-            <p style={styles.content}>{tweet.content}</p>
-            <span style={styles.timestamp}>{formattedDate}</span>
-        </div>
+        <Card elevation={2}>
+            <CardContent>
+                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                    <Box display="flex" alignItems="center">
+                        <Avatar sx={{ marginRight: 1 }}>
+                            {user.username.charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Typography variant="subtitle1" component="span" fontWeight="bold">
+                            {user.username}
+                        </Typography>
+                    </Box>
+                    {!isOwnTweet && (
+                        <FollowButton 
+                            userId={user.id} 
+                            onFollowChange={onFollowChange}
+                        />
+                    )}
+                </Box>
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {content}
+                </Typography>
+                <Typography variant="caption" color="textSecondary">
+                    {getTimeAgo()}
+                </Typography>
+            </CardContent>
+        </Card>
     );
-};
-
-const styles = {
-    tweet: {
-        padding: '15px',
-        borderBottom: '1px solid #eee',
-        backgroundColor: 'white',
-        borderRadius: '10px',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-    },
-    header: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '10px'
-    },
-    username: {
-        fontWeight: 'bold',
-        color: '#1DA1F2',
-        textDecoration: 'none',
-        '&:hover': {
-            textDecoration: 'underline'
-        }
-    },
-    content: {
-        margin: '10px 0',
-        lineHeight: '1.5'
-    },
-    timestamp: {
-        fontSize: '12px',
-        color: '#536471'
-    }
 };
 
 export default Tweet;

@@ -2,6 +2,8 @@ package com.auth.controller;
 
 import com.auth.model.User;
 import com.auth.service.SocialGraphService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -10,8 +12,10 @@ import java.util.List;
 import java.util.Set;
 
 @RestController
-@RequestMapping("/api/v2/social")
+@RequestMapping("/api/social")
+@CrossOrigin(origins = "http://localhost:3000")
 public class SocialGraphController {
+    private static final Logger logger = LoggerFactory.getLogger(SocialGraphController.class);
     
     @Autowired
     private SocialGraphService socialGraphService;
@@ -32,10 +36,13 @@ public class SocialGraphController {
     public ResponseEntity<?> unfollowUser(
             @RequestAttribute("userId") Long followerId,
             @PathVariable Long followingId) {
+        logger.info("⚡ Unfollow request - {} -> {}", followerId, followingId);
         try {
             socialGraphService.unfollowUser(followerId, followingId);
+            logger.info("✅ Unfollow successful");
             return ResponseEntity.ok().build();
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
+            logger.error("❌ Unfollow failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }

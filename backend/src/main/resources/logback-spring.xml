@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/base.xml"/>
+    
+    <!-- Set logging level for Hibernate -->
+    <logger name="org.hibernate" level="INFO"/>
+    
+    <!-- Set logging level for our application packages -->
+    <logger name="com.auth.controller" level="DEBUG"/>
+    <logger name="com.auth.service" level="DEBUG"/>
+    <logger name="com.auth.repository" level="DEBUG"/>
+    
+    <!-- Console appender with custom pattern -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{36}) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

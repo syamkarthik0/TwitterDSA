@@ -25,7 +25,7 @@ public class TweetService {
     private FeedService feedService;
 
     @Transactional
-    public Tweet createTweet(String content, String username) {
+    public Tweet createTweet(Long userId, String content) {
         if (content == null || content.trim().isEmpty()) {
             throw new IllegalArgumentException("Tweet content cannot be empty");
         }
@@ -33,7 +33,7 @@ public class TweetService {
             throw new IllegalArgumentException("Tweet content cannot exceed 280 characters");
         }
 
-        User user = userRepository.findByUsername(username)
+        User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
 
         Tweet tweet = new Tweet();
@@ -49,12 +49,15 @@ public class TweetService {
         return tweet;
     }
 
-    public Page<Tweet> getUserTweets(String username, int page, int size) {
+    public Page<Tweet> getUserTweets(Long userId, int page, int size) {
         if (size > 50) {
             size = 50; // Limit maximum page size
         }
-        return tweetRepository.findByUserUsername(
-            username,
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+            
+        return tweetRepository.findByUserOrderByTimestampDesc(
+            user,
             PageRequest.of(page, size)
         );
     }
@@ -68,11 +71,20 @@ public class TweetService {
         );
     }
 
-    public Page<Tweet> getUserFeed(Long userId, int page, int size) {
-        if (size > 50) {
-            size = 50; // Limit maximum page size
+    @Transactional(readOnly = true)
+    public Page<Tweet> getFeedForUser(Long userId, int page, int size) {
+        return feedService.getFeedForUser(userId, PageRequest.of(page, size));
+    }
+    
+    @Transactional
+    public void deleteTweet(Long userId, Long tweetId) {
+        Tweet tweet = tweetRepository.findById(tweetId)
+            .orElseThrow(() -> new RuntimeException("Tweet not found"));
+            
+        if (!tweet.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Not authorized to delete this tweet");
         }
-        return feedService.getUserFeed(userId, PageRequest.of(page, size))
-            .map(UserFeed::getTweet);
+        
+        tweetRepository.delete(tweet);
     }
 }

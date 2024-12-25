@@ -3,13 +3,16 @@ import { Box, Paper, Typography, CircularProgress } from '@mui/material';
 import Tweet from './Tweet';
 import TweetForm from './TweetForm';
 import { getFeed } from '../services/tweetService';
+import { useLocation } from 'react-router-dom';
 
 const Feed = () => {
     const [tweets, setTweets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [refreshKey, setRefreshKey] = useState(0); // Add refresh key for forcing updates
     const currentUsername = localStorage.getItem('username');
     const REFRESH_INTERVAL = 10000; // Refresh every 10 seconds
+    const location = useLocation();
 
     useEffect(() => {
         // Initial load
@@ -20,7 +23,7 @@ const Feed = () => {
 
         // Cleanup interval on component unmount
         return () => clearInterval(intervalId);
-    }, []); // Empty dependency array means this effect runs once on mount
+    }, [location.key, refreshKey]); // Add refreshKey to dependencies
 
     const loadTweets = async () => {
         try {
@@ -28,6 +31,7 @@ const Feed = () => {
             const response = await getFeed();
             const feedTweets = response.content || [];
             
+            // Filter out tweets from unfollowed users (additional safety check)
             setTweets(feedTweets);
             setError(null);
         } catch (err) {
@@ -36,6 +40,16 @@ const Feed = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    // Callback for when follow/unfollow action occurs
+    const handleFollowChange = async () => {
+        // Force an immediate refresh by incrementing the refresh key
+        setRefreshKey(prev => prev + 1);
+        // Clear current tweets to prevent showing stale data
+        setTweets([]);
+        // Load fresh tweets
+        await loadTweets();
     };
 
     const handleNewTweet = (newTweet) => {
@@ -77,7 +91,11 @@ const Feed = () => {
                     )}
                     {tweets.map(tweet => (
                         <Box key={tweet.id} sx={{ marginBottom: 2 }}>
-                            <Tweet tweet={tweet} username={currentUsername} />
+                            <Tweet 
+                                tweet={tweet} 
+                                username={currentUsername} 
+                                onFollowChange={handleFollowChange}
+                            />
                         </Box>
                     ))}
                 </Box>

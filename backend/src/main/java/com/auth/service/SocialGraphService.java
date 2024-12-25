@@ -4,6 +4,9 @@ import com.auth.graph.SocialGraph;
 import com.auth.model.User;
 import com.auth.model.Tweet;
 import com.auth.repository.UserRepository;
+import com.auth.service.FeedService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,13 +17,17 @@ import java.util.stream.Collectors;
 
 @Service
 public class SocialGraphService {
+    private static final Logger logger = LoggerFactory.getLogger(SocialGraphService.class);
+    
     private final SocialGraph socialGraph;
     private final UserRepository userRepository;
+    private final FeedService feedService;
 
     @Autowired
-    public SocialGraphService(SocialGraph socialGraph, UserRepository userRepository) {
+    public SocialGraphService(SocialGraph socialGraph, UserRepository userRepository, FeedService feedService) {
         this.socialGraph = socialGraph;
         this.userRepository = userRepository;
+        this.feedService = feedService;
         initializeGraph();
     }
 
@@ -83,10 +90,46 @@ public class SocialGraphService {
     // Unfollow a user
     @Transactional
     public void unfollowUser(Long followerId, Long followingId) {
+        logger.info("Starting unfollow process - Follower: {}, Unfollowing: {}", followerId, followingId);
+        
         if (followerId.equals(followingId)) {
+            logger.warn("Attempted to unfollow self - User: {}", followerId);
             throw new IllegalArgumentException("Users cannot unfollow themselves");
         }
+        
+        User follower = userRepository.findById(followerId)
+            .orElseThrow(() -> new IllegalArgumentException("Follower not found"));
+        User following = userRepository.findById(followingId)
+            .orElseThrow(() -> new IllegalArgumentException("Following user not found"));
 
+        // Check if not following
+        if (!socialGraph.isFollowing(followerId, followingId)) {
+            logger.info("Not following user {} -> {}, no action needed", followerId, followingId);
+            return;
+        }
+
+        // Update database relationships
+        follower.getFollowing().remove(following);
+        following.getFollowers().remove(follower);
+        userRepository.save(follower);
+        userRepository.save(following);
+        
+        // Remove from social graph
+        socialGraph.removeFollowing(followerId, followingId);
+        logger.info("Removed follower from social graph");
+        
+        // Remove tweets from feed
+        try {
+            logger.info("Attempting to remove tweets from feed");
+            feedService.removeUserTweetsFromFeed(followerId, followingId);
+            logger.info("Successfully removed tweets from feed");
+        } catch (Exception e) {
+            logger.error("Error removing tweets from feed: {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    private void validateUsers(Long followerId, Long followingId) {
         User follower = userRepository.findById(followerId)
             .orElseThrow(() -> new IllegalArgumentException("Follower not found"));
         User following = userRepository.findById(followingId)
@@ -97,15 +140,13 @@ public class SocialGraphService {
             return; // Not following, no need to do anything
         }
 
-        // Remove from graph first
-        socialGraph.removeFollowing(followerId, followingId);
-
         // Update database
         follower.getFollowing().remove(following);
         following.getFollowers().remove(follower);
         
-        // Save only the follower since the relationship is managed from the follower side
+        // Save both users to persist the relationship changes
         userRepository.save(follower);
+        userRepository.save(following);
     }
 
     // Get user's followers
