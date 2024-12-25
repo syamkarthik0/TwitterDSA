@@ -9,10 +9,18 @@ const Feed = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const currentUsername = localStorage.getItem('username');
+    const REFRESH_INTERVAL = 10000; // Refresh every 10 seconds
 
     useEffect(() => {
+        // Initial load
         loadTweets();
-    }, []);
+
+        // Set up auto-refresh interval
+        const intervalId = setInterval(loadTweets, REFRESH_INTERVAL);
+
+        // Cleanup interval on component unmount
+        return () => clearInterval(intervalId);
+    }, []); // Empty dependency array means this effect runs once on mount
 
     const loadTweets = async () => {
         try {
@@ -34,7 +42,7 @@ const Feed = () => {
         setTweets(prevTweets => [newTweet, ...prevTweets]);
     };
 
-    if (loading) {
+    if (loading && tweets.length === 0) {
         return (
             <Box sx={{ margin: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
                 <CircularProgress />
@@ -62,6 +70,11 @@ const Feed = () => {
                 </Paper>
             ) : (
                 <Box>
+                    {loading && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', padding: 1 }}>
+                            <CircularProgress size={20} />
+                        </Box>
+                    )}
                     {tweets.map(tweet => (
                         <Box key={tweet.id} sx={{ marginBottom: 2 }}>
                             <Tweet tweet={tweet} username={currentUsername} />
