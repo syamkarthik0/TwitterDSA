@@ -223,4 +223,3 @@ This application uses a graph data structure to represent and manage user relati
 - Efficient cache for user retrieval.
 - Flexible extensions for advanced features like recommendations.
 
-This tutorial provides a strong foundation for understanding and building graph-based applications. Let me know if you’d like to implement additional features or optimizations!
