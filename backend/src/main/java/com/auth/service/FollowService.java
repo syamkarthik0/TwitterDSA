@@ -92,27 +92,31 @@ public class FollowService {
     @Transactional
     public void unfollowUser(Long followerId, Long followingId) {
         logger.debug("Attempting to unfollow - Follower ID: {}, Following ID: {}", followerId, followingId);
-
+    
         if (followerId == null || followingId == null) {
             logger.error("Invalid unfollow request - Follower ID or Following ID is null");
             throw new IllegalArgumentException("Both follower and following IDs are required");
         }
-
+    
         if (!followerRepository.isFollowing(followerId, followingId)) {
             logger.error("Invalid unfollow request - Not following user");
             throw new IllegalStateException("Not following this user");
         }
-
+    
         try {
             FollowerId id = new FollowerId(followerId, followingId);
             followerRepository.deleteById(id);
-            logger.info("Successfully removed follow relationship - Follower: {}, Following: {}", followerId, followingId);
+    
+            // Remove all tweets of the unfollowed user from the follower's feed
+            userFeedRepository.deleteByUserIdAndTweetUserId(followerId, followingId);
+    
+            logger.info("Successfully removed follow relationship and feed entries - Follower: {}, Following: {}", followerId, followingId);
         } catch (Exception e) {
             logger.error("Error removing follow relationship: {}", e.getMessage());
             throw new RuntimeException("Failed to remove follow relationship", e);
         }
     }
-
+    
     public List<User> getFollowers(Long userId) {
         logger.debug("Getting followers for user ID: {}", userId);
         return followerRepository.findFollowersByFollowingId(userId);
